@@ -38,13 +38,15 @@ try {
     }
 
     // Recalcular totales desde tabla pagos (excluyendo anulados)
+    // Se usa pe.updated_at (momento del cobro) para asignar el pedido al turno
+    // en que realmente fue cobrado, incluso si fue abierto en un turno anterior.
     $stPagos = $db->prepare("
         SELECT p.metodo, SUM(p.monto) as total
         FROM pagos p
         JOIN pedidos pe ON pe.id = p.pedido_id
         WHERE pe.restaurante_id = ? 
           AND pe.estado = 'cobrado'
-          AND p.created_at >= ?
+          AND pe.updated_at BETWEEN ? AND NOW()
           AND p.anulado = 0
         GROUP BY p.metodo
     ");
@@ -65,11 +67,10 @@ try {
         $totales['general'] += $monto;
     }
 
-    // Calcular número de pedidos cobrados en este turno (basado en pagos.created_at para consistencia con totales)
+    // Calcular número de pedidos cobrados en este turno
     $stPedidos = $db->prepare("
-        SELECT COUNT(DISTINCT p.pedido_id) FROM pagos p
-        JOIN pedidos pe ON pe.id = p.pedido_id
-        WHERE pe.restaurante_id = ? AND p.created_at >= ? AND p.anulado = 0
+        SELECT COUNT(id) FROM pedidos
+        WHERE restaurante_id = ? AND estado = 'cobrado' AND updated_at BETWEEN ? AND NOW()
     ");
     $stPedidos->execute([$restauranteId, $turno['inicio']]);
     $numPedidos = $stPedidos->fetchColumn();

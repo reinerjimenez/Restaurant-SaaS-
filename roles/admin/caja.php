@@ -27,7 +27,7 @@ if ($turnoActivo) {
         SELECT p.metodo, SUM(p.monto) as total
         FROM pagos p
         JOIN pedidos pe ON pe.id = p.pedido_id
-        WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado' AND p.anulado = 0 AND p.created_at >= ?
+        WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado' AND p.anulado = 0 AND pe.updated_at >= ?
         GROUP BY p.metodo
     ");
     $stTotalesRT->execute([$restauranteId, $turnoActivo['inicio']]);
@@ -62,7 +62,7 @@ $fechaFiltro = $_GET['fecha'] ?? date('Y-m-d');
 // Historial de turnos cerrados del día
 $stHistorial = $db->prepare("
     SELECT t.*, u.nombre AS abierto_por,
-           (SELECT COUNT(DISTINCT p.pedido_id) FROM pagos p JOIN pedidos pe ON pe.id = p.pedido_id WHERE pe.restaurante_id = t.restaurante_id AND pe.estado = 'cobrado' AND p.anulado = 0 AND p.created_at BETWEEN t.inicio AND t.fin) as num_pedidos
+           (SELECT COUNT(pe.id) FROM pedidos pe WHERE pe.restaurante_id = t.restaurante_id AND pe.estado = 'cobrado' AND pe.updated_at BETWEEN t.inicio AND t.fin) as num_pedidos
     FROM turnos t
     JOIN usuarios u ON u.id = t.usuario_id
     WHERE t.restaurante_id = ? AND t.fin IS NOT NULL
