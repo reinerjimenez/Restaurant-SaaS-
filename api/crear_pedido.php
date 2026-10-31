@@ -60,6 +60,18 @@ try {
     }
 
     $db->commit();
+
+    // Auditoría
+    $mesaLabel = $mesaId ? "Mesa $mesaId" : 'Para llevar';
+    if ($mesaId) {
+        $stMesaNro = $db->prepare("SELECT numero FROM mesas WHERE id = ?");
+        $stMesaNro->execute([$mesaId]);
+        $mesaNro = $stMesaNro->fetchColumn();
+        if ($mesaNro !== false) $mesaLabel = "Mesa $mesaNro";
+    }
+    $tipoLabel = $tipo === 'aqui' ? 'En local' : 'Para llevar';
+    registrarAuditoria($db, 'Abrió comanda', "Pedido #$pedidoId · $mesaLabel · $tipoLabel");
+
     jsonResponse(true, ['pedido_id' => $pedidoId], 'Pedido creado correctamente');
 
 } catch (PDOException $e) {

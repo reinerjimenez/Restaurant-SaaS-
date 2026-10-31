@@ -83,6 +83,14 @@ try {
     $stTotal->execute([$totalAgregado, $pedidoId]);
 
     $db->commit();
+
+    // Auditoría
+    $nItems = count($items);
+    $detalle = $nItems === 1
+        ? "$nItems plato enviado a cocina · Pedido #$pedidoId"
+        : "$nItems platos enviados a cocina · Pedido #$pedidoId";
+    registrarAuditoria($db, 'Envió pedido a cocina', $detalle);
+
     jsonResponse(true, ['total_agregado' => $totalAgregado], 'Items añadidos correctamente');
 
 } catch (PDOException $e) {
