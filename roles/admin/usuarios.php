@@ -140,7 +140,12 @@ require_once '../../includes/header.php';
                 </div>
                 <div class="form-group" id="grp-password">
                     <label class="form-label"><span id="lbl-pass">Contraseña</span></label>
-                    <input type="password" id="usr-password" class="form-control" placeholder="Mín. 6 caracteres" autocomplete="new-password">
+                    <div style="position:relative;">
+                        <input type="password" id="usr-password" class="form-control" style="padding-right:48px;" placeholder="Mín. 6 caracteres" autocomplete="new-password">
+                        <button type="button" onclick="alternarPassword('usr-password', this)" aria-label="Mostrar contraseña" title="Mostrar contraseña" style="position:absolute;right:0;top:50%;transform:translateY(-50%);width:44px;height:44px;border:0;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
                     <div class="form-error" id="lbl-pass-edit" style="display:none;">Dejar en blanco para mantener la contraseña actual</div>
                 </div>
                 <div class="form-group">
@@ -164,10 +169,29 @@ require_once '../../includes/header.php';
 <script>
 let modoEdicionUsr = false;
 
+function alternarPassword(inputId, boton) {
+    const input = document.getElementById(inputId);
+    const mostrar = input.type === 'password';
+    input.type = mostrar ? 'text' : 'password';
+    boton.setAttribute('aria-label', mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    boton.setAttribute('title', mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    boton.querySelector('i').className = mostrar ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+}
+
+function ocultarPassword(inputId) {
+    const input = document.getElementById(inputId);
+    const boton = input.nextElementSibling;
+    input.type = 'password';
+    boton.setAttribute('aria-label', 'Mostrar contraseña');
+    boton.setAttribute('title', 'Mostrar contraseña');
+    boton.querySelector('i').className = 'fa-solid fa-eye';
+}
+
 function nuevoUsuario() {
     modoEdicionUsr = false;
     document.getElementById('modal-usr-titulo').innerHTML = '<i class="fa-solid fa-user-plus"></i> Nuevo Usuario';
     document.getElementById('form-usr').reset();
+    ocultarPassword('usr-password');
     document.getElementById('usr-id').value = '';
     document.getElementById('lbl-pass-edit').style.display = 'none';
     Modal.abrir('modal-usuario');
@@ -182,6 +206,7 @@ function editarUsuario(usr) {
     document.getElementById('usr-rol').value    = usr.rol;
     document.getElementById('usr-activo').value = usr.activo;
     document.getElementById('usr-password').value = '';
+    ocultarPassword('usr-password');
     document.getElementById('lbl-pass-edit').style.display = 'block';
     Modal.abrir('modal-usuario');
 }

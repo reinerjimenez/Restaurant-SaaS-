@@ -47,31 +47,43 @@ $stUsuarios = $db->prepare("
     SELECT 
         u.id,
         u.nombre AS usuario,
-        SUM(CASE WHEN p.metodo = 'efectivo' THEN p.monto ELSE 0 END) AS total_efectivo,
-        SUM(CASE WHEN p.metodo = 'yape' THEN p.monto ELSE 0 END) AS total_yape,
-        SUM(CASE WHEN p.metodo = 'transferencia' THEN p.monto ELSE 0 END) AS total_transferencia,
-        SUM(CASE WHEN p.metodo = 'tarjeta' THEN p.monto ELSE 0 END) AS total_tarjeta,
-        SUM(CASE WHEN p.metodo = 'otros' THEN p.monto ELSE 0 END) AS total_otros,
-        SUM(p.monto) AS total_general
-    FROM pagos p
-    JOIN pedidos pe ON pe.id = p.pedido_id
-    JOIN usuarios u ON u.id = pe.usuario_id
-    WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado' AND p.anulado = 0 AND pe.updated_at BETWEEN ? AND ?
-    GROUP BY u.id
-    ORDER BY total_general DESC
+        COALESCE(v.total_efectivo, 0) AS total_efectivo,
+        COALESCE(v.total_yape, 0) AS total_yape,
+        COALESCE(v.total_transferencia, 0) AS total_transferencia,
+        COALESCE(v.total_tarjeta, 0) AS total_tarjeta,
+        COALESCE(v.total_otros, 0) AS total_otros,
+        COALESCE(v.total_general, 0) AS total_general,
+        COALESCE(g.total_gastos, 0) AS total_gastos
+    FROM usuarios u
+    LEFT JOIN (
+        SELECT
+            pe.usuario_id,
+            SUM(CASE WHEN p.metodo = 'efectivo' THEN p.monto ELSE 0 END) AS total_efectivo,
+            SUM(CASE WHEN p.metodo = 'yape' THEN p.monto ELSE 0 END) AS total_yape,
+            SUM(CASE WHEN p.metodo = 'transferencia' THEN p.monto ELSE 0 END) AS total_transferencia,
+            SUM(CASE WHEN p.metodo = 'tarjeta' THEN p.monto ELSE 0 END) AS total_tarjeta,
+            SUM(CASE WHEN p.metodo = 'otros' THEN p.monto ELSE 0 END) AS total_otros,
+            COALESCE(SUM(p.monto), 0) AS total_general
+        FROM pedidos pe
+        LEFT JOIN pagos p ON p.pedido_id = pe.id AND p.anulado = 0
+        WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado' AND pe.updated_at BETWEEN ? AND ?
+        GROUP BY pe.usuario_id
+    ) v ON v.usuario_id = u.id
+    LEFT JOIN (
+        SELECT usuario_id, SUM(monto) AS total_gastos
+        FROM gastos
+        WHERE restaurante_id = ? AND created_at BETWEEN ? AND ? AND activo = 1
+        GROUP BY usuario_id
+    ) g ON g.usuario_id = u.id
+    WHERE u.restaurante_id = ? AND (v.usuario_id IS NOT NULL OR g.usuario_id IS NOT NULL)
+    ORDER BY total_general DESC, u.nombre
 ");
-$stUsuarios->execute([$restauranteId, $turno['inicio'], $turno['fin']]);
+$stUsuarios->execute([
+    $restauranteId, $turno['inicio'], $turno['fin'],
+    $restauranteId, $turno['inicio'], $turno['fin'],
+    $restauranteId
+]);
 $desgloseUsuarios = $stUsuarios->fetchAll();
-
-// Gastos por usuario
-$stGastosUsuarios = $db->prepare("
-    SELECT usuario_id, COALESCE(SUM(monto), 0) AS total_gastos 
-    FROM gastos 
-    WHERE restaurante_id = ? AND created_at BETWEEN ? AND ? AND activo = 1 
-    GROUP BY usuario_id
-");
-$stGastosUsuarios->execute([$restauranteId, $turno['inicio'], $turno['fin']]);
-$gastosPorUsuario = $stGastosUsuarios->fetchAll(PDO::FETCH_KEY_PAIR);
 
 $pageTitle = 'Detalles del Turno';
 $activeMenu = 'caja';
@@ -158,7 +170,7 @@ require_once '../../includes/header.php';
                 </thead>
                 <tbody>
                     <?php foreach ($desgloseUsuarios as $du): 
-                        $gastoU = floatval($gastosPorUsuario[$du['id']] ?? 0);
+                        $gastoU = floatval($du['total_gastos']);
                         $utilidadU = floatval($du['total_general']) - $gastoU;
                     ?>
                     <tr>
