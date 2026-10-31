@@ -7,7 +7,7 @@
  */
 session_start();
 require_once '../config/db.php';
-requireRole(['atencion', 'admin', 'superadmin']);
+requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 
 header('Content-Type: application/json; charset=utf-8');
 

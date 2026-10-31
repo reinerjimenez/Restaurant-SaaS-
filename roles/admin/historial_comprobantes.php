@@ -6,7 +6,7 @@
  */
 session_start();
 require_once '../../config/db.php';
-requireRole(['admin', 'superadmin']);
+requireRole(['admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
 $db = getDB();
@@ -244,7 +244,7 @@ require_once '../../includes/header.php';
                                         <a href="ver_comprobante.php?id=<?= $c['id'] ?>" class="btn btn-ghost btn-sm" title="Ver detalle">
                                             <i class="fa-solid fa-eye"></i>
                                         </a>
-                                        <?php if (!$c['anulado']): ?>
+                                        <?php if (!$c['anulado'] && $_SESSION['rol'] !== 'encargado'): ?>
                                         <button class="btn btn-peligro btn-sm"
                                             onclick="anularComprobante(<?= $c['id'] ?>, '<?= htmlspecialchars(addslashes($c['numero_comprobante'])) ?>')"
                                             title="Anular">

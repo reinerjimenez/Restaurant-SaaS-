@@ -7,7 +7,7 @@
  */
 session_start();
 require_once '../config/db.php';
-requireRole(['cocina', 'admin', 'superadmin', 'atencion']);
+requireRole(['cocina', 'admin', 'encargado', 'superadmin', 'atencion']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 

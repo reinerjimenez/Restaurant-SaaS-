@@ -119,6 +119,7 @@ try {
     }
 
     $db->commit();
+    registrarAuditoria($db, 'Reabrió venta', "Pedido #$pedidoId");
     jsonResponse(true, null, 'Pedido reabierto correctamente');
 
 } catch (PDOException $e) {

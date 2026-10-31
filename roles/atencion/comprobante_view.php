@@ -6,7 +6,7 @@
  */
 session_start();
 require_once '../../config/db.php';
-requireRole(['atencion', 'admin', 'superadmin']);
+requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 
 $comprobanteId = (int)($_GET['id'] ?? 0);
 $restauranteId = $_SESSION['restaurante_id'];
@@ -67,7 +67,7 @@ require_once '../../includes/header.php';
         <button class="btn btn-primario btn-sm" onclick="window.print()">
             <i class="fa-solid fa-print"></i> Imprimir
         </button>
-        <?php if (in_array($_SESSION['rol'], ['admin','superadmin'])): ?>
+        <?php if (in_array($_SESSION['rol'], ['admin','encargado','superadmin'])): ?>
         <a href="<?= BASE_URL ?>/roles/admin/ver_comprobante.php?id=<?= $comprobanteId ?>" class="btn btn-ghost btn-sm">
             <i class="fa-solid fa-eye"></i> Vista Admin
         </a>

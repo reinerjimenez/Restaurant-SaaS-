@@ -6,7 +6,7 @@
  */
 session_start();
 require_once '../config/db.php';
-requireRole(['cocina', 'atencion', 'admin', 'superadmin']);
+requireRole(['cocina', 'atencion', 'admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
 $db = getDB();

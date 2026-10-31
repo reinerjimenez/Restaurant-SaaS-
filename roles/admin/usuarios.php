@@ -5,7 +5,7 @@
  */
 session_start();
 require_once '../../config/db.php';
-requireRole(['admin', 'superadmin']);
+requireRole(['admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
 $db = getDB();
@@ -64,7 +64,7 @@ require_once '../../includes/header.php';
                                 </td>
                                 <td style="color:var(--text-secondary);font-size:.875rem;"><?= htmlspecialchars($u['email']) ?></td>
                                 <td>
-                                    <span class="badge <?= ['admin'=>'badge-azul','atencion'=>'badge-verde','cocina'=>'badge-naranja'][$u['rol']] ?? 'badge-gris' ?>">
+                                    <span class="badge <?= ['admin'=>'badge-azul','encargado'=>'badge-azul','atencion'=>'badge-verde','cocina'=>'badge-naranja'][$u['rol']] ?? 'badge-gris' ?>">
                                         <?= ucfirst($u['rol']) ?>
                                     </span>
                                 </td>
@@ -81,7 +81,7 @@ require_once '../../includes/header.php';
                                             <i class="fa-solid fa-pen"></i>
                                             <span class="btn-label-desktop"> Editar</span>
                                         </button>
-                                        <?php if ($u['id'] != $_SESSION['usuario_id']): ?>
+                                        <?php if ($_SESSION['rol'] !== 'encargado' && $u['id'] != $_SESSION['usuario_id']): ?>
                                         <button class="btn btn-peligro btn-sm" title="Eliminar"
                                             onclick="eliminarUsuario(<?= $u['id'] ?>, '<?= htmlspecialchars($u['nombre'], ENT_QUOTES) ?>')">
                                             <i class="fa-solid fa-trash"></i>
@@ -130,7 +130,12 @@ require_once '../../includes/header.php';
                     <select id="usr-rol" class="form-control">
                         <option value="atencion">Atención al cliente</option>
                         <option value="cocina">Cocina</option>
+                        <?php if (in_array($_SESSION['rol'], ['admin', 'superadmin'], true)): ?>
+                        <option value="encargado">Encargado</option>
+                        <?php endif; ?>
+                        <?php if ($_SESSION['rol'] === 'superadmin'): ?>
                         <option value="admin">Administrador</option>
+                        <?php endif; ?>
                     </select>
                 </div>
                 <div class="form-group" id="grp-password">

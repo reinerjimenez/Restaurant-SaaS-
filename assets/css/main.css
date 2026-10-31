@@ -253,6 +253,11 @@ p {
   color: #fff;
 }
 
+.rol-encargado {
+  background: #0ea5e9;
+  color: #fff;
+}
+
 .rol-atencion {
   background: var(--info);
   color: #fff;
@@ -2672,6 +2677,10 @@ tbody td {
 
 .avatar-admin {
   background: var(--info);
+}
+
+.avatar-encargado {
+  background: #0ea5e9;
 }
 
 .avatar-atencion {

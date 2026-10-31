@@ -5,7 +5,7 @@
  */
 session_start();
 require_once '../config/db.php';
-requireRole(['atencion', 'admin', 'superadmin']);
+requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
@@ -125,6 +125,7 @@ try {
     }
 
     $db->commit();
+    registrarAuditoria($db, 'Cobró pedido', sprintf('Pedido #%d · Total S/ %.2f', $pedidoId, $totalPagado));
     jsonResponse(true, ['total_cobrado' => $totalPagado], '¡Cobro registrado exitosamente!');
 
 } catch (PDOException $e) {

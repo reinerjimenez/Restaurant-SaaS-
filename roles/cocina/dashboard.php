@@ -5,7 +5,7 @@
  */
 session_start();
 require_once '../../config/db.php';
-requireRole(['cocina', 'admin', 'superadmin']);
+requireRole(['cocina', 'admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
 $pageTitle     = 'Panel Cocina';

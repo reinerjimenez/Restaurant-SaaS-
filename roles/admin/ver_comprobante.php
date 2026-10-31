@@ -6,7 +6,7 @@
  */
 session_start();
 require_once '../../config/db.php';
-requireRole(['admin', 'superadmin', 'atencion']);
+requireRole(['admin', 'encargado', 'superadmin', 'atencion']);
 $rolActual = $_SESSION['rol'] ?? '';
 
 $comprobanteId = (int)($_GET['id'] ?? 0);

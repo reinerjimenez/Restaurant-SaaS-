@@ -5,7 +5,7 @@
  */
 session_start();
 require_once '../config/db.php';
-requireRole(['atencion', 'admin', 'superadmin']);
+requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 
 $productoId    = (int)($_GET['producto_id'] ?? 0);
 $restauranteId = $_SESSION['restaurante_id'];

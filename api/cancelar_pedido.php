@@ -6,7 +6,7 @@
  */
 session_start();
 require_once '../config/db.php';
-requireRole(['atencion', 'admin', 'superadmin']);
+requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
@@ -29,8 +29,15 @@ try {
         jsonResponse(false, null, 'Pedido no encontrado o ya procesado');
     }
 
-    // Seguridad: El rol atención solo puede cancelar si el pedido no tiene items.
-    if ($_SESSION['rol'] === 'atencion') {
+    $mesaNumero = null;
+    if ($pedido['mesa_id']) {
+        $stMesaNumero = $db->prepare("SELECT numero FROM mesas WHERE id = ? AND restaurante_id = ?");
+        $stMesaNumero->execute([$pedido['mesa_id'], $restauranteId]);
+        $mesaNumero = $stMesaNumero->fetchColumn();
+    }
+
+    // Seguridad: atención y encargado solo pueden cancelar si el pedido no tiene ítems.
+    if (in_array($_SESSION['rol'], ['atencion', 'encargado'], true)) {
         $stCheckItems = $db->prepare("SELECT COUNT(id) FROM pedido_items WHERE pedido_id = ?");
         $stCheckItems->execute([$pedidoId]);
         if ($stCheckItems->fetchColumn() > 0) {
@@ -50,6 +57,8 @@ try {
     }
 
     $db->commit();
+    $ubicacion = $mesaNumero ? 'Mesa ' . $mesaNumero : 'Para llevar';
+    registrarAuditoria($db, 'Canceló comanda', "Pedido #$pedidoId · $ubicacion");
     jsonResponse(true, null, 'Pedido cancelado y mesa liberada');
 
 } catch (PDOException $e) {

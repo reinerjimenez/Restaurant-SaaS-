@@ -96,6 +96,30 @@ function jsonResponse(bool $success, $data = null, string $message = ''): void {
 }
 
 /**
+ * Registra una acción relevante sin interrumpir el flujo principal si falla.
+ */
+function registrarAuditoria(PDO $db, string $accion, string $detalle = ''): void {
+    if (empty($_SESSION['usuario_id']) || empty($_SESSION['restaurante_id'])) return;
+
+    try {
+        $stmt = $db->prepare(
+            "INSERT INTO auditoria (restaurante_id, usuario_id, usuario_nombre, accion, detalle, ip)
+             VALUES (?, ?, ?, ?, ?, ?)"
+        );
+        $stmt->execute([
+            $_SESSION['restaurante_id'],
+            $_SESSION['usuario_id'],
+            $_SESSION['nombre'] ?? 'Desconocido',
+            $accion,
+            $detalle ?: null,
+            $_SERVER['REMOTE_ADDR'] ?? null,
+        ]);
+    } catch (Throwable $e) {
+        error_log('No se pudo registrar auditoría: ' . $e->getMessage());
+    }
+}
+
+/**
  * Verifica sesión activa y rol permitido.
  * Si no cumple, redirige al login o devuelve JSON si es petición AJAX.
  */

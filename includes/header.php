@@ -9,6 +9,7 @@
 $rolLabel = [
     'superadmin' => 'Super Admin',
     'admin'      => 'Administrador',
+    'encargado'  => 'Encargado',
     'atencion'   => 'Atención',
     'cocina'     => 'Cocina',
 ][$_SESSION['rol']] ?? $_SESSION['rol'];

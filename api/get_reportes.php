@@ -5,7 +5,7 @@
  */
 session_start();
 require_once '../config/db.php';
-requireRole(['admin', 'superadmin']);
+requireRole(['admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
 $fechaInicio   = $_GET['fecha_inicio'] ?? date('Y-m-01');

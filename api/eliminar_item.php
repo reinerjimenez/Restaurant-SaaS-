@@ -6,7 +6,7 @@
  */
 session_start();
 require_once '../config/db.php';
-requireRole(['admin', 'superadmin']);   // Solo administradores
+requireRole(['admin', 'encargado', 'superadmin']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
@@ -23,7 +23,7 @@ try {
 
     // Verificar que el ítem pertenece a un pedido activo de este restaurante
     $stItem = $db->prepare("
-        SELECT pi.id, pi.subtotal, pi.pedido_id, p.mesa_id
+        SELECT pi.id, pi.subtotal, pi.pedido_id, pi.nombre_producto, p.mesa_id
         FROM pedido_items pi
         JOIN pedidos p ON p.id = pi.pedido_id
         WHERE pi.id = ?
@@ -53,6 +53,8 @@ try {
     $db->prepare("UPDATE pedidos SET total = ? WHERE id = ?")->execute([$nuevoTotal, $item['pedido_id']]);
 
     $db->commit();
+    $nombreProducto = $item['nombre_producto'] ?: 'Ítem';
+    registrarAuditoria($db, 'Eliminó ítem del pedido', "$nombreProducto · Pedido #{$item['pedido_id']}");
     jsonResponse(true, ['nuevo_total' => $nuevoTotal], 'Ítem eliminado correctamente');
 
 } catch (PDOException $e) {

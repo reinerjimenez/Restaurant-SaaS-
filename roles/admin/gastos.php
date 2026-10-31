@@ -5,7 +5,7 @@
  */
 session_start();
 require_once '../../config/db.php';
-requireRole(['admin', 'superadmin']);
+requireRole(['admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
 $usuarioId     = $_SESSION['usuario_id'];
@@ -24,7 +24,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
     $monto       = floatval($_POST['monto'] ?? 0);
     $fecha       = $_POST['fecha'] ?? date('Y-m-d');
 
-    if ($accion === 'registrar' && $categoria && $descripcion && $monto > 0 && $fecha) {
+    if ($_SESSION['rol'] === 'encargado' && in_array($accion, ['editar', 'eliminar'], true)) {
+        $mensaje = "<div class='toast error'><i class='fa-solid fa-circle-xmark'></i> No tienes permiso para editar o eliminar gastos.</div>";
+    } elseif ($accion === 'registrar' && $categoria && $descripcion && $monto > 0 && $fecha) {
         $st = $db->prepare("INSERT INTO gastos (restaurante_id, usuario_id, categoria, descripcion, monto, fecha) VALUES (?, ?, ?, ?, ?, ?)");
         if ($st->execute([$restauranteId, $usuarioId, $categoria, $descripcion, $monto, $fecha])) {
             $mensaje = "<div class='toast exito'><i class='fa-solid fa-circle-check'></i> Gasto registrado.</div>";
@@ -120,7 +122,9 @@ require_once '../../includes/header.php';
                         <th>Descripción</th>
                         <th>Registrado por</th>
                         <th class="text-right">Monto</th>
+                        <?php if ($_SESSION['rol'] !== 'encargado'): ?>
                         <th class="text-right">Acciones</th>
+                        <?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
@@ -131,6 +135,7 @@ require_once '../../includes/header.php';
                         <td><?= htmlspecialchars($g['descripcion']) ?></td>
                         <td><?= htmlspecialchars($g['usuario_nombre']) ?></td>
                         <td class="text-right fw-700" style="color: var(--danger);">S/ <?= number_format($g['monto'], 2) ?></td>
+                        <?php if ($_SESSION['rol'] !== 'encargado'): ?>
                         <td class="text-right">
                             <button class="btn btn-ghost btn-sm" onclick='editarGasto(<?= json_encode($g) ?>)'>
                                 <i class="fa-solid fa-pen"></i>
@@ -139,6 +144,7 @@ require_once '../../includes/header.php';
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                         </td>
+                        <?php endif; ?>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>

@@ -56,10 +56,13 @@ try {
     $_SESSION['email']          = $usuario['email'];
     $_SESSION['rol']            = $usuario['rol'];
 
+    registrarAuditoria($db, 'Inició sesión');
+
     // Redirigir según rol
     $destinos = [
         'superadmin' => BASE_URL . '/roles/superadmin/dashboard.php',
         'admin'      => BASE_URL . '/roles/admin/dashboard.php',
+        'encargado'  => BASE_URL . '/roles/admin/dashboard.php',
         'atencion'   => BASE_URL . '/roles/atencion/dashboard.php',
         'cocina'     => BASE_URL . '/roles/cocina/dashboard.php',
     ];

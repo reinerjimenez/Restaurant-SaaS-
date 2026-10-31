@@ -5,7 +5,7 @@
  */
 session_start();
 require_once '../../config/db.php';
-requireRole(['admin', 'superadmin']);
+requireRole(['admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
 $db = getDB();
@@ -128,12 +128,14 @@ require_once '../../includes/header.php';
                                             <i class="fa-solid fa-print"></i>
                                         </a>
                                         <?php endif; ?>
+                                        <?php if ($_SESSION['rol'] !== 'encargado'): ?>
                                         <button class="btn btn-ghost btn-sm" style="color:var(--primary);" onclick="reabrirPedido(<?= $p['id'] ?>)" title="Modificar Pedido">
                                             <i class="fa-solid fa-pen"></i>
                                         </button>
                                         <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="eliminarPedido(<?= $p['id'] ?>)" title="Eliminar Venta">
                                             <i class="fa-solid fa-trash"></i>
                                         </button>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>

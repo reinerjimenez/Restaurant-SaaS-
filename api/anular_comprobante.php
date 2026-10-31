@@ -21,7 +21,7 @@ if (!$motivo)        jsonResponse(false, null, 'El motivo es requerido.');
 $db = getDB();
 
 // Verificar que pertenece al restaurante y no está ya anulado
-$st = $db->prepare("SELECT id, anulado FROM comprobantes WHERE id = ? AND restaurante_id = ?");
+$st = $db->prepare("SELECT id, numero_comprobante, anulado FROM comprobantes WHERE id = ? AND restaurante_id = ?");
 $st->execute([$comprobanteId, $restauranteId]);
 $comp = $st->fetch();
 
@@ -31,4 +31,5 @@ if ($comp['anulado'])    jsonResponse(false, null, 'El comprobante ya está anul
 $stUpd = $db->prepare("UPDATE comprobantes SET anulado = 1, motivo_anulacion = ? WHERE id = ?");
 $stUpd->execute([substr($motivo, 0, 200), $comprobanteId]);
 
+registrarAuditoria($db, 'Anuló comprobante', $comp['numero_comprobante']);
 jsonResponse(true, null, 'Comprobante anulado correctamente.');

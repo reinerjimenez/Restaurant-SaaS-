@@ -102,6 +102,7 @@ try {
     $stCan->execute([$pedidoId]);
 
     $db->commit();
+    registrarAuditoria($db, 'Eliminó venta', "Pedido #$pedidoId");
     jsonResponse(true, null, 'Venta eliminada correctamente');
 
 } catch (PDOException $e) {

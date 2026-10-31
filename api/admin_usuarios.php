@@ -5,7 +5,7 @@
  */
 session_start();
 require_once '../config/db.php';
-requireRole(['admin', 'superadmin']);
+requireRole(['admin', 'encargado', 'superadmin']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
@@ -25,9 +25,13 @@ switch ($accion) {
         $password = trim($input['password'] ?? '');
         $activo   = !empty($input['activo']) ? 1 : 0;
 
-        $rolesPermitidos = ($rolActual === 'superadmin')
-            ? ['admin','atencion','cocina']
-            : ['atencion','cocina'];
+        if ($rolActual === 'superadmin') {
+            $rolesPermitidos = ['admin', 'encargado', 'atencion', 'cocina'];
+        } elseif ($rolActual === 'admin') {
+            $rolesPermitidos = ['encargado', 'atencion', 'cocina'];
+        } else {
+            $rolesPermitidos = ['atencion', 'cocina'];
+        }
 
         if (empty($nombre) || empty($email) || !in_array($rol, $rolesPermitidos)) {
             jsonResponse(false, null, 'Datos inválidos o rol no permitido');
@@ -44,7 +48,9 @@ switch ($accion) {
         $hash = password_hash($password, PASSWORD_BCRYPT);
         $st   = $db->prepare("INSERT INTO usuarios (restaurante_id, nombre, email, password, rol, activo) VALUES (?,?,?,?,?,?)");
         $st->execute([$restauranteId, $nombre, $email, $hash, $rol, $activo]);
-        jsonResponse(true, ['id' => $db->lastInsertId()], "Usuario \"$nombre\" creado correctamente");
+        $nuevoUsuarioId = $db->lastInsertId();
+        registrarAuditoria($db, 'Creó usuario', "$nombre · Rol: $rol");
+        jsonResponse(true, ['id' => $nuevoUsuarioId], "Usuario \"$nombre\" creado correctamente");
 
     case 'editar':
         $id       = (int)($input['id']      ?? 0);
@@ -59,9 +65,13 @@ switch ($accion) {
         if (mb_strlen($nombre) > 100) jsonResponse(false, null, 'El nombre es demasiado largo (máx 100 caracteres)');
 
         // Mismos roles permitidos que en 'crear' — previene escalada de privilegios
-        $rolesPermitidos = ($rolActual === 'superadmin')
-            ? ['admin', 'atencion', 'cocina']
-            : ['atencion', 'cocina'];
+        if ($rolActual === 'superadmin') {
+            $rolesPermitidos = ['admin', 'encargado', 'atencion', 'cocina'];
+        } elseif ($rolActual === 'admin') {
+            $rolesPermitidos = ['encargado', 'atencion', 'cocina'];
+        } else {
+            $rolesPermitidos = ['atencion', 'cocina'];
+        }
 
         if (!in_array($rol, $rolesPermitidos)) {
             jsonResponse(false, null, 'Rol no permitido');
@@ -94,12 +104,22 @@ switch ($accion) {
         jsonResponse(true, null, "Usuario \"$nombre\" actualizado correctamente");
 
     case 'eliminar':
+        if ($rolActual === 'encargado') {
+            jsonResponse(false, null, 'No tienes permiso para eliminar usuarios.');
+        }
+
         $id = (int)($input['id'] ?? 0);
         if (!$id) jsonResponse(false, null, 'ID requerido');
         if ($id === $usuarioActual) jsonResponse(false, null, 'No puedes eliminarte a ti mismo');
 
+        $stUsuario = $db->prepare("SELECT nombre FROM usuarios WHERE id = ? AND restaurante_id = ? AND rol != 'superadmin'");
+        $stUsuario->execute([$id, $restauranteId]);
+        $usuarioEliminar = $stUsuario->fetch();
+        if (!$usuarioEliminar) jsonResponse(false, null, 'Usuario no encontrado');
+
         $st = $db->prepare("DELETE FROM usuarios WHERE id=? AND restaurante_id=? AND rol != 'superadmin'");
         $st->execute([$id, $restauranteId]);
+        registrarAuditoria($db, 'Eliminó usuario', $usuarioEliminar['nombre']);
         jsonResponse(true, null, 'Usuario eliminado correctamente');
 
     default:

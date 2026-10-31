@@ -16,6 +16,7 @@ if (!isset($rolLabel)) {
     $rolLabel = [
         'superadmin' => 'Super Admin',
         'admin'      => 'Administrador',
+        'encargado'  => 'Encargado',
         'atencion'   => 'Atención',
         'cocina'     => 'Cocina',
     ][$rol] ?? $rol;
@@ -42,8 +43,25 @@ if ($rol === 'superadmin') {
             <li><a href="<?= BASE_URL ?>/roles/superadmin/dashboard.php"><span class="menu-icon"><i class="fa-solid fa-globe"></i></span> Dashboard Global</a></li>
             <li><a href="<?= BASE_URL ?>/roles/superadmin/restaurantes.php"><span class="menu-icon"><i class="fa-solid fa-store"></i></span> Restaurantes</a></li>
             <li><a href="<?= BASE_URL ?>/roles/superadmin/perfil.php"><span class="menu-icon"><i class="fa-solid fa-user-shield"></i></span> Mi Perfil</a></li>
+            <?php if (!empty($_SESSION['restaurante_id'])): ?>
+            <li><a href="<?= BASE_URL ?>/roles/admin/auditoria.php"><span class="menu-icon"><i class="fa-solid fa-shield-halved"></i></span> Auditoría</a></li>
+            <?php endif; ?>
 
         <?php elseif ($rol === 'admin'): ?>
+            <li><a href="<?= BASE_URL ?>/roles/admin/dashboard.php"><span class="menu-icon"><i class="fa-solid fa-chart-bar"></i></span> Dashboard</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/mesas.php"><span class="menu-icon"><i class="fa-solid fa-chair"></i></span> Mesas</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/menu_categorias.php"><span class="menu-icon"><i class="fa-solid fa-folder"></i></span> Categorías</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/menu_productos.php"><span class="menu-icon"><i class="fa-solid fa-utensils"></i></span> Productos</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/usuarios.php"><span class="menu-icon"><i class="fa-solid fa-users"></i></span> Usuarios</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/reportes.php"><span class="menu-icon"><i class="fa-solid fa-chart-line"></i></span> Reportes</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/auditoria.php"><span class="menu-icon"><i class="fa-solid fa-shield-halved"></i></span> Auditoría</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/gastos.php"><span class="menu-icon"><i class="fa-solid fa-money-bill-wave"></i></span> Gastos</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/historial.php"><span class="menu-icon"><i class="fa-solid fa-clock-rotate-left"></i></span> Historial</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/historial_comprobantes.php"><span class="menu-icon"><i class="fa-solid fa-file-invoice"></i></span> Comprobantes</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/caja.php"><span class="menu-icon"><i class="fa-solid fa-cash-register"></i></span> Caja</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/config_facturacion.php"><span class="menu-icon"><i class="fa-solid fa-store"></i></span> Mi Restaurante</a></li>
+
+        <?php elseif ($rol === 'encargado'): ?>
             <li><a href="<?= BASE_URL ?>/roles/admin/dashboard.php"><span class="menu-icon"><i class="fa-solid fa-chart-bar"></i></span> Dashboard</a></li>
             <li><a href="<?= BASE_URL ?>/roles/admin/mesas.php"><span class="menu-icon"><i class="fa-solid fa-chair"></i></span> Mesas</a></li>
             <li><a href="<?= BASE_URL ?>/roles/admin/menu_categorias.php"><span class="menu-icon"><i class="fa-solid fa-folder"></i></span> Categorías</a></li>
@@ -54,7 +72,6 @@ if ($rol === 'superadmin') {
             <li><a href="<?= BASE_URL ?>/roles/admin/historial.php"><span class="menu-icon"><i class="fa-solid fa-clock-rotate-left"></i></span> Historial</a></li>
             <li><a href="<?= BASE_URL ?>/roles/admin/historial_comprobantes.php"><span class="menu-icon"><i class="fa-solid fa-file-invoice"></i></span> Comprobantes</a></li>
             <li><a href="<?= BASE_URL ?>/roles/admin/caja.php"><span class="menu-icon"><i class="fa-solid fa-cash-register"></i></span> Caja</a></li>
-            <li><a href="<?= BASE_URL ?>/roles/admin/config_facturacion.php"><span class="menu-icon"><i class="fa-solid fa-store"></i></span> Mi Restaurante</a></li>
 
         <?php elseif ($rol === 'atencion'): ?>
             <li><a href="<?= BASE_URL ?>/roles/atencion/dashboard.php"><span class="menu-icon"><i class="fa-solid fa-map-location-dot"></i></span> Mapa de Mesas</a></li>
