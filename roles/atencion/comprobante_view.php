@@ -210,6 +210,7 @@ require_once '../../includes/header.php';
                 <span>-S/ <?= number_format($comp['descuento'], 2) ?></span>
             </div>
             <?php endif; ?>
+            <?php if ($comp['tipo'] !== 'simple'): ?>
             <div class="ticket-total-row">
                 <span>Op. Gravada:</span>
                 <span>S/ <?= number_format($comp['subtotal'], 2) ?></span>
@@ -218,6 +219,7 @@ require_once '../../includes/header.php';
                 <span>IGV (18%):</span>
                 <span>S/ <?= number_format($comp['igv'], 2) ?></span>
             </div>
+            <?php endif; ?>
             <div class="ticket-total-row total-final">
                 <span>TOTAL:</span>
                 <span>S/ <?= number_format($comp['total'], 2) ?></span>

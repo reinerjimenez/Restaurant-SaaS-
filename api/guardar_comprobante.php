@@ -115,9 +115,14 @@ try {
     $stItems->execute([$pedidoId]);
     $items = $stItems->fetchAll();
 
-    // 5. Calcular subtotal e IGV (18%)
-    $subtotal = round($totalFinal / 1.18, 2);
-    $igv      = round($totalFinal - $subtotal, 2);
+    // 5. Calcular subtotal e IGV (18%) — solo aplica a boleta y factura
+    if ($tipo === 'simple') {
+        $subtotal = $totalFinal;
+        $igv      = 0.00;
+    } else {
+        $subtotal = round($totalFinal / 1.18, 2);
+        $igv      = round($totalFinal - $subtotal, 2);
+    }
 
     // 6. Insertar comprobante
     $stComp = $db->prepare("
