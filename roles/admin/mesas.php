@@ -15,11 +15,12 @@ $stTurno->execute([$restauranteId]);
 $cajaAbierta = (bool)$stTurno->fetch();
 
 $stMesas = $db->prepare("
-    SELECT m.*,
+    SELECT m.id, m.restaurante_id, m.numero, m.capacidad, m.activo,
+           CASE WHEN p.id IS NOT NULL THEN 'ocupada' ELSE m.estado END AS estado,
            p.id  AS pedido_id,
            p.tipo,
            p.total,
-           p.created_at AS pedido_inicio,
+           p.updated_at AS pedido_actividad,
            COUNT(pi.id) AS num_items
     FROM mesas m
     LEFT JOIN pedidos p  ON p.mesa_id = m.id AND p.estado = 'activo'
@@ -61,13 +62,13 @@ require_once '../../includes/header.php';
                 </div>
                 <div class="mesas-map-grid" id="mesas-map-grid">
                     <?php foreach ($mesas as $m): ?>
-                    <?php $min = $m['pedido_inicio'] ? round((time() - strtotime($m['pedido_inicio'])) / 60) : 0; ?>
+                    <?php $min = $m['pedido_actividad'] ? max(0, round((time() - strtotime($m['pedido_actividad'])) / 60)) : 0; ?>
                     <div class="mesa-map-card <?= $m['activo'] ? $m['estado'] : 'inactiva' ?>"
                          data-id="<?= $m['id'] ?>"
                          onclick="<?= $m['activo'] ? "clickMesa(".htmlspecialchars(json_encode($m)).")" : "Toast.advertencia('Mesa inactiva')" ?>">
 
-                        <?php if ($m['pedido_inicio']): ?>
-                        <div class="map-tiempo"><?= $min ?>m</div>
+                        <?php if ($m['pedido_actividad']): ?>
+                        <div class="map-tiempo" title="Desde la última actualización del pedido"><?= $min ?>m</div>
                         <?php endif; ?>
 
                         <?php if ($m['pedido_id']): ?>
@@ -251,7 +252,7 @@ function clickMesa(mesa) {
     const body   = document.getElementById('modal-mesa-body');
     titulo.innerHTML = `<i class="fa-solid fa-chair"></i> Mesa ${mesa.numero}`;
 
-    if (mesa.estado === 'libre') {
+    if (!mesa.pedido_id && mesa.estado === 'libre') {
         sub.innerHTML = `<i class="fa-solid fa-users"></i> ${mesa.capacidad} personas &middot; Libre`;
         if (!CAJA_ABIERTA) {
             body.innerHTML = `
@@ -275,9 +276,9 @@ function clickMesa(mesa) {
                 </div>`;
         }
     } else if (mesa.pedido_id) {
-        const minutos = mesa.pedido_inicio
-            ? Math.round((Date.now() - new Date(mesa.pedido_inicio).getTime()) / 60000) : 0;
-        sub.innerHTML = `<i class="fa-solid fa-hourglass-half"></i> ${minutos} min &middot; ${mesa.num_items} plato(s) &middot; S/ ${parseFloat(mesa.total).toFixed(2)}`;
+        const minutos = mesa.pedido_actividad
+            ? Math.max(0, Math.round((Date.now() - new Date(mesa.pedido_actividad.replace(' ', 'T') + '-05:00').getTime()) / 60000)) : 0;
+        sub.innerHTML = `<i class="fa-solid fa-hourglass-half"></i> Última actividad: ${minutos} min &middot; ${mesa.num_items} plato(s) &middot; S/ ${parseFloat(mesa.total).toFixed(2)}`;
         body.innerHTML = `
             <div style="display:flex;flex-direction:column;gap:10px;padding:8px 0;">
                 <button onclick="verDetalle(${mesa.pedido_id}, ${mesa.id})"
@@ -445,6 +446,7 @@ async function refreshMesaCard(mesaId) {
         if (!card) return;
         const estEl = card.querySelector('.map-est');
         if (estEl) estEl.textContent = m.pedido_id ? `S/ ${parseFloat(m.total).toFixed(2)}` : m.estado.toUpperCase();
+        card.className = `mesa-map-card ${m.activo ? m.estado : 'inactiva'}`;
         let badge = card.querySelector('.map-badge');
         if (m.pedido_id && m.num_items > 0) {
             if (!badge) { badge = document.createElement('div'); badge.className = 'map-badge'; card.appendChild(badge); }

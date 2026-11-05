@@ -82,7 +82,7 @@ try {
 
     // Liberar la mesa
     if ($pedido['mesa_id']) {
-        $stMesa = $db->prepare("UPDATE mesas SET estado = 'libre' WHERE id = ?");
+        $stMesa = $db->prepare("UPDATE mesas m SET estado = 'libre' WHERE m.id = ? AND NOT EXISTS (SELECT 1 FROM pedidos p WHERE p.mesa_id = m.id AND p.estado = 'activo')");
         $stMesa->execute([$pedido['mesa_id']]);
     }
 

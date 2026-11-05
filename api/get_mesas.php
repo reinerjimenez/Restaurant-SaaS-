@@ -11,8 +11,9 @@ $restauranteId = $_SESSION['restaurante_id'];
 $db = getDB();
 
 $st = $db->prepare("
-    SELECT m.id, m.numero, m.capacidad, m.estado,
-           p.id AS pedido_id, p.total, p.tipo, p.created_at AS pedido_inicio,
+    SELECT m.id, m.numero, m.capacidad, m.activo,
+           CASE WHEN p.id IS NOT NULL THEN 'ocupada' ELSE m.estado END AS estado,
+           p.id AS pedido_id, p.total, p.tipo, p.updated_at AS pedido_actividad,
            COUNT(pi.id) AS num_items
     FROM mesas m
     LEFT JOIN pedidos p ON p.mesa_id = m.id AND p.estado = 'activo'

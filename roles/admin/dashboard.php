@@ -28,7 +28,7 @@ $gastosDia = $stGastosDia->fetchColumn();
 
 $utilidadDia = $ventas['total_dia'] - $gastosDia;
 
-$stMesas = $db->prepare("SELECT COUNT(*) AS ocupadas FROM mesas WHERE restaurante_id = ? AND estado = 'ocupada' AND activo = 1");
+$stMesas = $db->prepare("SELECT COUNT(*) AS ocupadas FROM mesas m WHERE m.restaurante_id = ? AND m.activo = 1 AND (m.estado = 'ocupada' OR EXISTS (SELECT 1 FROM pedidos p WHERE p.mesa_id = m.id AND p.estado = 'activo'))");
 $stMesas->execute([$restauranteId]);
 $mesasOcupadas = $stMesas->fetchColumn();
 

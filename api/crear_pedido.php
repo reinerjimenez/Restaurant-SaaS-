@@ -39,9 +39,15 @@ try {
             $db->rollBack();
             jsonResponse(false, null, 'Mesa no encontrada');
         }
-        if ($mesa['estado'] === 'ocupada') {
+        $stActivo = $db->prepare("SELECT id FROM pedidos WHERE mesa_id = ? AND estado = 'activo' LIMIT 1");
+        $stActivo->execute([$mesaId]);
+        if ($stActivo->fetch()) {
             $db->rollBack();
             jsonResponse(false, null, 'La mesa ya tiene un pedido activo');
+        }
+        if ($mesa['estado'] !== 'libre') {
+            $db->rollBack();
+            jsonResponse(false, null, 'La mesa no está libre');
         }
     }
 

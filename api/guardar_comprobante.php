@@ -194,7 +194,7 @@ try {
     $stCobrar->execute([$notas ?: null, $descuento, $cargo_extra, $totalFinal, $pedidoId]);
 
     if ($pedido['mesa_id']) {
-        $db->prepare("UPDATE mesas SET estado = 'libre' WHERE id = ?")->execute([$pedido['mesa_id']]);
+        $db->prepare("UPDATE mesas m SET estado = 'libre' WHERE m.id = ? AND NOT EXISTS (SELECT 1 FROM pedidos p WHERE p.mesa_id = m.id AND p.estado = 'activo')")->execute([$pedido['mesa_id']]);
     }
 
     // 9. Actualizar turno activo global del restaurante

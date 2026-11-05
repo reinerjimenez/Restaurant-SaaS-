@@ -36,6 +36,18 @@ try {
         jsonResponse(false, null, 'Solo se pueden modificar pedidos cobrados');
     }
 
+    if ($pedido['mesa_id']) {
+        $stMesa = $db->prepare("SELECT estado FROM mesas WHERE id = ? AND restaurante_id = ? FOR UPDATE");
+        $stMesa->execute([$pedido['mesa_id'], $restauranteId]);
+        $mesa = $stMesa->fetch();
+        $stActivo = $db->prepare("SELECT id FROM pedidos WHERE mesa_id = ? AND estado = 'activo' LIMIT 1");
+        $stActivo->execute([$pedido['mesa_id']]);
+        if (!$mesa || $mesa['estado'] !== 'libre' || $stActivo->fetch()) {
+            $db->rollBack();
+            jsonResponse(false, null, 'La mesa ya está ocupada o reservada. Cobra o cancela su pedido actual antes de reabrir esta venta.');
+        }
+    }
+
     // 1. Obtener los pagos que se van a anular para revertir el turno
     $stPagosElim = $db->prepare("
         SELECT metodo, SUM(monto) AS total
@@ -103,19 +115,10 @@ try {
     $stAct = $db->prepare("UPDATE pedidos SET estado = 'activo' WHERE id = ?");
     $stAct->execute([$pedidoId]);
 
-    // 6. Reocupar la mesa si el pedido tiene una asignada
+    // 6. Reocupar la mesa validada antes de revertir los pagos
     if ($pedido['mesa_id']) {
-        // Verificar que la mesa esté libre antes de ocuparla (podría haberse reasignado)
-        $stMesa = $db->prepare("SELECT estado FROM mesas WHERE id = ? AND restaurante_id = ?");
-        $stMesa->execute([$pedido['mesa_id'], $restauranteId]);
-        $mesa = $stMesa->fetch();
-
-        if ($mesa && $mesa['estado'] === 'libre') {
-            $db->prepare("UPDATE mesas SET estado = 'ocupada' WHERE id = ?")
-               ->execute([$pedido['mesa_id']]);
-        }
-        // Si la mesa ya está ocupada por otro pedido, no se bloquea la reapertura,
-        // pero la inconsistencia queda registrada en el estado del pedido activo.
+        $db->prepare("UPDATE mesas SET estado = 'ocupada' WHERE id = ?")
+           ->execute([$pedido['mesa_id']]);
     }
 
     $db->commit();
