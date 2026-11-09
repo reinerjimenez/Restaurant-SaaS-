@@ -62,7 +62,8 @@ $fechaFiltro = $_GET['fecha'] ?? date('Y-m-d');
 // Historial de turnos cerrados del día
 $stHistorial = $db->prepare("
     SELECT t.*, u.nombre AS abierto_por,
-           (SELECT COUNT(pe.id) FROM pedidos pe WHERE pe.restaurante_id = t.restaurante_id AND pe.estado = 'cobrado' AND pe.updated_at BETWEEN t.inicio AND t.fin) as num_pedidos
+           (SELECT COUNT(pe.id) FROM pedidos pe WHERE pe.restaurante_id = t.restaurante_id AND pe.estado = 'cobrado' AND pe.updated_at BETWEEN t.inicio AND t.fin) as num_pedidos,
+           (SELECT COALESCE(SUM(g.monto), 0) FROM gastos g WHERE g.restaurante_id = t.restaurante_id AND g.created_at BETWEEN t.inicio AND t.fin AND g.activo = 1) as total_gastos
     FROM turnos t
     JOIN usuarios u ON u.id = t.usuario_id
     WHERE t.restaurante_id = ? AND t.fin IS NOT NULL
@@ -444,6 +445,11 @@ require_once '../../includes/header.php';
                             <?= $lbl ?>: S/ <?= number_format($m, 2) ?>
                         </span>
                         <?php endforeach; ?>
+                        <?php if (floatval($t['total_gastos'] ?? 0) > 0): ?>
+                        <span style="font-size:.7rem;padding:2px 8px;border-radius:999px;background:#ef444422;color:#ef4444;border:1px solid #ef444444;font-weight:600;">
+                            <i class="fa-solid fa-money-bill-transfer"></i> Gastos: S/ <?= number_format(floatval($t['total_gastos']), 2) ?>
+                        </span>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="historial-monto">
