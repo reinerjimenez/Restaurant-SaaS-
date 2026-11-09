@@ -1,0 +1,7 @@
+{
+  "fecha": "2026-11-09",
+  "php_lint": "NO EJECUTADO: WinError 4551, control de aplicaciones Windows",
+  "sql_contrato_exit_code": 1,
+  "bd_conectada": false,
+  "http_app_ejecutado": false
+}

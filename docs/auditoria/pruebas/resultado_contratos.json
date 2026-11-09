@@ -1,0 +1,12 @@
+{
+  "conexion_bd": false,
+  "faltan_columnas_comprobantes": [
+    "created_at",
+    "pagos_json"
+  ],
+  "pk_comprobantes_declarada": false,
+  "tablas": 17,
+  "inserts": [
+    "usuarios"
+  ]
+}

@@ -1,0 +1,20 @@
+# Mejoras al encargo para futuras auditorías
+
+Se conserva el documento de Downloads. Esta versión de criterios resuelve ambigüedades detectadas al ejecutarlo y mejora la precisión de una auditoría futura.
+
+1. **Hipótesis, también H-000.** La afirmación de secreto en Git debe verificarse; el token no vacío no prueba su vigencia ni que el repositorio sea público. Revisar seguimiento, introducción real y remoto sin imprimir contenido. En este árbol H-000 se confirma localmente; publicación/validez no pudieron verificarse.
+2. **SQL: una regla de ubicación.** La auditoría permite crear solo docs/auditoria/, pero AGENTS del proyecto exige scripts en Database/. Hasta autorizar una fase de implementación, documentar diseños y reversas en propuestas_sql/README.md. Los SQL ejecutables definitivos se prepararán en Database/ con permiso de alcance de implementación. No crear BD descartable automáticamente: la regla crítica también cubre pruebas.
+3. **Revisión estática frente a prueba operativa.** Mantener dos coberturas distintas: archivos examinados y escenarios ejecutados. El 100 % de archivos no prueba aislamiento, rendimiento ni ausencia de bugs. No marcar un escenario aprobado por haber leído su endpoint.
+4. **No declarar vulnerabilidad por patrón aislado.** Una escritura por id puede estar protegida por validación previa del padre; seguir el flujo completo. total=total+? es atómico; buscar carrera de estado, locks y cálculo de negocio. DATE puede optimizarse en motores/versiones concretos: solicitar EXPLAIN antes de asegurar full scan.
+5. **Jerarquía de permisos.** Revisar actor, rol actual del destinatario y rol solicitado. Un encargado que cambia un admin a atención viola la jerarquía; no demuestra que pueda autenticarse después como admin si la escritura le cambió el rol.
+6. **Contrato de instalación.** Comparar columnas, PK, índices, FK, motor y JSON de cada CREATE con las consultas consumidoras. Contar tablas/INSERT no detecta DDL incompleto. Comprobar instaladores y migraciones como rutas alternativas/consecutivas explícitas.
+7. **Cierres y reversos.** Definir si pedido pertenece al turno de apertura o pago, cómo se registran devoluciones y qué queda congelado. Exigir pruebas repetidas de reapertura con descuentos y dos sesiones distintas. No atribuir movimiento histórico por LIMIT 1 sobre rangos ambiguos.
+8. **Validación y persistencia única.** Verificar que pagos/ítems rechazados no reaparezcan en acumuladores, JSON o comprobantes y que todas las pantallas usen el mismo conjunto de movimientos.
+9. **Checkpoint al terminar Fase 1.** Guardar y comunicar veredicto antes de continuar. Puede ser un punto de control durante la auditoría completa autorizada, sin pedir aprobación innecesaria. Si el dueño quiere una pausa real, indicarlo como requisito explícito.
+10. **Afirmaciones externas.** Consultar fuentes primarias de proveedor/SUNAT/ANPD con fecha; diferenciar límite documentado, límite de cuenta y carga medida. Si falta tarifa del producto o plan, entregar fórmula y datos pendientes, no inventar presupuesto ni rentabilidad.
+11. **Protección de los propios informes.** No publicar docs/auditoria ni grafo/caché con el sitio. Guardar secretos fuera de artefactos y registrar verificaciones solo por presencia/longitud. Reportar controles de servidor como pendientes si no se observaron.
+12. **Mejoras de código como fase aparte.** Una auditoría de solo lectura entrega diagnóstico y cambios revisables. Si se autoriza implementar, elegir la primera ola, respetar Database/ y añadir pruebas de escenarios concretos. No afirmar que los hallazgos quedaron resueltos por escribir un plan.
+
+## Instrucción de cierre mejorada
+
+Entregar resumen, hallazgos verificables, matriz, análisis de BD/capacidad, plan y cobertura. Declarar qué es estático, qué se ejecutó, qué bloqueó el entorno y qué falta para cambiar el Go/No-Go. Las conclusiones de negocio dependen de esos límites, no del porcentaje de lectura. Conservar evidencia y versión de fuente para repetir la auditoría después de cada corrección.
