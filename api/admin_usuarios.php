@@ -64,12 +64,34 @@ switch ($accion) {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) jsonResponse(false, null, 'Correo electrónico inválido');
         if (mb_strlen($nombre) > 100) jsonResponse(false, null, 'El nombre es demasiado largo (máx 100 caracteres)');
 
-        // Mismos roles permitidos que en 'crear' — previene escalada de privilegios
+        // Leer el rol ACTUAL del usuario objetivo antes de cualquier validación
+        $stChkRol = $db->prepare("SELECT rol FROM usuarios WHERE id = ? AND restaurante_id = ?");
+        $stChkRol->execute([$id, $restauranteId]);
+        $usuarioTarget = $stChkRol->fetch();
+        if (!$usuarioTarget) jsonResponse(false, null, 'Usuario no encontrado');
+
+        $rolTarget = $usuarioTarget['rol'];
+
+        // Superadmin no se puede editar desde este endpoint
+        if ($rolTarget === 'superadmin') jsonResponse(false, null, 'No se puede editar una cuenta superadmin desde este panel');
+
+        // — H-019: validar jerarquía sobre el rol ACTUAL del objetivo —
+        // El encargado solo puede gestionar atencion/cocina; no puede tocar admin ni encargado
+        if ($rolActual === 'encargado' && !in_array($rolTarget, ['atencion', 'cocina'], true)) {
+            jsonResponse(false, null, 'No tienes permiso para editar este usuario');
+        }
+        // El admin no puede editar a otros admin ni a superadmin (ya cubierto arriba)
+        if ($rolActual === 'admin' && $rolTarget === 'admin' && $id !== $usuarioActual) {
+            jsonResponse(false, null, 'No puedes editar a otro administrador');
+        }
+
+        // Roles permitidos para el nuevo rol (destino)
         if ($rolActual === 'superadmin') {
             $rolesPermitidos = ['admin', 'encargado', 'atencion', 'cocina'];
         } elseif ($rolActual === 'admin') {
             $rolesPermitidos = ['encargado', 'atencion', 'cocina'];
         } else {
+            // encargado: solo puede asignar atencion/cocina
             $rolesPermitidos = ['atencion', 'cocina'];
         }
 
@@ -80,13 +102,6 @@ switch ($accion) {
         // No puede desactivarse a sí mismo
         if ($id === $usuarioActual && !$activo) jsonResponse(false, null, 'No puedes desactivar tu propia cuenta');
 
-        // No se permite editar un superadmin desde este endpoint
-        $stChkRol = $db->prepare("SELECT rol FROM usuarios WHERE id = ? AND restaurante_id = ?");
-        $stChkRol->execute([$id, $restauranteId]);
-        $usuarioTarget = $stChkRol->fetch();
-        if (!$usuarioTarget) jsonResponse(false, null, 'Usuario no encontrado');
-        if ($usuarioTarget['rol'] === 'superadmin') jsonResponse(false, null, 'No se puede editar una cuenta superadmin desde este panel');
-
         // Verificar email único excluyendo el propio
         $stDup = $db->prepare("SELECT id FROM usuarios WHERE email = ? AND id != ?");
         $stDup->execute([$email, $id]);
@@ -95,12 +110,15 @@ switch ($accion) {
         if (!empty($password)) {
             if (strlen($password) < 6) jsonResponse(false, null, 'La contraseña debe tener al menos 6 caracteres');
             $hash = password_hash($password, PASSWORD_BCRYPT);
-            $st   = $db->prepare("UPDATE usuarios SET nombre=?, email=?, password=?, rol=?, activo=? WHERE id=? AND restaurante_id=?");
+            // Incrementar session_version para invalidar sesiones activas del usuario editado
+            $st   = $db->prepare("UPDATE usuarios SET nombre=?, email=?, password=?, rol=?, activo=?, session_version = session_version + 1 WHERE id=? AND restaurante_id=?");
             $st->execute([$nombre, $email, $hash, $rol, $activo, $id, $restauranteId]);
         } else {
-            $st = $db->prepare("UPDATE usuarios SET nombre=?, email=?, rol=?, activo=? WHERE id=? AND restaurante_id=?");
+            // Siempre incrementar session_version al editar para invalidar sesiones activas del objetivo
+            $st = $db->prepare("UPDATE usuarios SET nombre=?, email=?, rol=?, activo=?, session_version = session_version + 1 WHERE id=? AND restaurante_id=?");
             $st->execute([$nombre, $email, $rol, $activo, $id, $restauranteId]);
         }
+        registrarAuditoria($db, 'Editó usuario', "$nombre · Rol: $rol");
         jsonResponse(true, null, "Usuario \"$nombre\" actualizado correctamente");
 
     case 'eliminar':
@@ -112,10 +130,16 @@ switch ($accion) {
         if (!$id) jsonResponse(false, null, 'ID requerido');
         if ($id === $usuarioActual) jsonResponse(false, null, 'No puedes eliminarte a ti mismo');
 
-        $stUsuario = $db->prepare("SELECT nombre FROM usuarios WHERE id = ? AND restaurante_id = ? AND rol != 'superadmin'");
+        // — H-019: leer rol actual del objetivo antes de eliminar —
+        $stUsuario = $db->prepare("SELECT nombre, rol FROM usuarios WHERE id = ? AND restaurante_id = ?");
         $stUsuario->execute([$id, $restauranteId]);
         $usuarioEliminar = $stUsuario->fetch();
         if (!$usuarioEliminar) jsonResponse(false, null, 'Usuario no encontrado');
+        if ($usuarioEliminar['rol'] === 'superadmin') jsonResponse(false, null, 'No se puede eliminar una cuenta superadmin');
+        // Admin solo puede eliminar encargado/atencion/cocina, no a otro admin
+        if ($rolActual === 'admin' && $usuarioEliminar['rol'] === 'admin') {
+            jsonResponse(false, null, 'No puedes eliminar a otro administrador');
+        }
 
         $st = $db->prepare("DELETE FROM usuarios WHERE id=? AND restaurante_id=? AND rol != 'superadmin'");
         $st->execute([$id, $restauranteId]);

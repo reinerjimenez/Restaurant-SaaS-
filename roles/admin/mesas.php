@@ -360,52 +360,121 @@ async function verDetalle(pedidoId, mesaId) {
 }
 
 function renderDetalle(p, mesaId) {
-    let html = `<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <span class="badge badge-azul"><i class="fa-solid fa-hashtag"></i>${p.id}</span>
+    // — Contenedor principal usando DOM para evitar XSS con datos de usuario —
+    const container = document.createDocumentFragment();
+
+    // Cabecera con badges (datos de sistema, no de usuario: id, tipo, mesa_numero son enteros/enum)
+    const headerDiv = document.createElement('div');
+    headerDiv.style.cssText = 'margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;';
+    headerDiv.innerHTML = `<span class="badge badge-azul"><i class="fa-solid fa-hashtag"></i>${parseInt(p.id)}</span>
         <span class="badge ${p.tipo==='aqui'?'badge-azul':'badge-naranja'}">
             <i class="fa-solid ${p.tipo==='aqui'?'fa-house':'fa-bag-shopping'}"></i>
             ${p.tipo==='aqui'?'Comer aquí':'Para llevar'}
         </span>
-        ${p.mesa_numero ? `<span class="badge badge-gris">Mesa ${p.mesa_numero}</span>` : ''}
-    </div>`;
+        ${p.mesa_numero ? `<span class="badge badge-gris">Mesa ${parseInt(p.mesa_numero)}</span>` : ''}`;
+    container.appendChild(headerDiv);
 
     if (!p.items || p.items.length === 0) {
-        html += `<div class="empty-state" style="padding:20px 0;">
-            <div class="icon"><i class="fa-solid fa-utensils"></i></div><p>Sin platos en este pedido</p>
-        </div>`;
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'empty-state';
+        emptyDiv.style.padding = '20px 0';
+        emptyDiv.innerHTML = '<div class="icon"><i class="fa-solid fa-utensils"></i></div><p>Sin platos en este pedido</p>';
+        container.appendChild(emptyDiv);
     } else {
         p.items.forEach(item => {
-            html += `
-            <div class="pedido-item" id="det-item-${item.id}">
-                <div style="flex:1;">
-                    <div class="pedido-item-nombre">${item.cantidad}x ${item.nombre}</div>
-                    ${item.opciones ? `<div class="pedido-item-opciones">· ${item.opciones}</div>` : ''}
-                    ${item.notas   ? `<div class="pedido-item-opciones"><i class="fa-solid fa-note-sticky"></i> ${item.notas}</div>` : ''}
-                </div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <div class="pedido-item-precio">S/ ${parseFloat(item.subtotal).toFixed(2)}</div>
-                    <button class="btn-del-item" title="Eliminar plato"
-                            onclick="eliminarItemDetalle(${item.id}, ${p.id}, ${mesaId})">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                </div>
-            </div>`;
+            // — Nodo completo del ítem sin interpolación de datos de usuario en HTML —
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'pedido-item';
+            itemDiv.id = `det-item-${parseInt(item.id)}`;
+
+            const infoDiv = document.createElement('div');
+            infoDiv.style.flex = '1';
+
+            const nombreDiv = document.createElement('div');
+            nombreDiv.className = 'pedido-item-nombre';
+            nombreDiv.textContent = `${parseInt(item.cantidad)}x ${item.nombre}`;
+            infoDiv.appendChild(nombreDiv);
+
+            if (item.opciones) {
+                const opDiv = document.createElement('div');
+                opDiv.className = 'pedido-item-opciones';
+                opDiv.textContent = `· ${item.opciones}`;
+                infoDiv.appendChild(opDiv);
+            }
+            if (item.notas) {
+                const notaDiv = document.createElement('div');
+                notaDiv.className = 'pedido-item-opciones';
+                const noteIcon = document.createElement('i');
+                noteIcon.className = 'fa-solid fa-note-sticky';
+                notaDiv.appendChild(noteIcon);
+                notaDiv.appendChild(document.createTextNode(` ${item.notas}`));
+                infoDiv.appendChild(notaDiv);
+            }
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.style.cssText = 'display:flex;align-items:center;gap:8px;';
+
+            const precioDiv = document.createElement('div');
+            precioDiv.className = 'pedido-item-precio';
+            precioDiv.textContent = `S/ ${parseFloat(item.subtotal).toFixed(2)}`;
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn-del-item';
+            delBtn.title = 'Eliminar plato';
+            // IDs numéricos almacenados en data-* para leerlos en el listener
+            delBtn.dataset.itemId   = parseInt(item.id);
+            delBtn.dataset.pedidoId = parseInt(p.id);
+            delBtn.dataset.mesaId   = parseInt(mesaId);
+            delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+            delBtn.addEventListener('click', function() {
+                eliminarItemDetalle(
+                    parseInt(this.dataset.itemId),
+                    parseInt(this.dataset.pedidoId),
+                    parseInt(this.dataset.mesaId)
+                );
+            });
+
+            actionsDiv.appendChild(precioDiv);
+            actionsDiv.appendChild(delBtn);
+            itemDiv.appendChild(infoDiv);
+            itemDiv.appendChild(actionsDiv);
+            container.appendChild(itemDiv);
         });
     }
 
-    html += `<div class="pedido-total mt-12" id="det-total-row">
-        <span>Total</span>
-        <span style="color:var(--success);" id="det-total-val">S/ ${parseFloat(p.total).toFixed(2)}</span>
-    </div>`;
+    // Total (datos numéricos del servidor — seguros en textContent)
+    const totalDiv = document.createElement('div');
+    totalDiv.className = 'pedido-total mt-12';
+    totalDiv.id = 'det-total-row';
+    const totalLabel = document.createElement('span');
+    totalLabel.textContent = 'Total';
+    const totalVal = document.createElement('span');
+    totalVal.id = 'det-total-val';
+    totalVal.style.color = 'var(--success)';
+    totalVal.textContent = `S/ ${parseFloat(p.total).toFixed(2)}`;
+    totalDiv.appendChild(totalLabel);
+    totalDiv.appendChild(totalVal);
+    container.appendChild(totalDiv);
 
-    html += `<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
-        <a href="<?= BASE_URL ?>/roles/atencion/comanda.php?pedido_id=${p.id}&mesa_id=${mesaId}"
-           class="btn btn-naranja btn-full"><i class="fa-solid fa-plus"></i> Añadir más platos</a>
-        <a href="<?= BASE_URL ?>/roles/atencion/cobrar.php?pedido_id=${p.id}"
-           class="btn btn-exito btn-full"><i class="fa-solid fa-sack-dollar"></i> Cobrar pedido</a>
-    </div>`;
+    // Botones de acción (pedido_id y mesa_id son enteros del servidor)
+    const botonesDiv = document.createElement('div');
+    botonesDiv.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:16px;';
+    const linkComanda = document.createElement('a');
+    linkComanda.href = `<?= BASE_URL ?>/roles/atencion/comanda.php?pedido_id=${parseInt(p.id)}&mesa_id=${parseInt(mesaId)}`;
+    linkComanda.className = 'btn btn-naranja btn-full';
+    linkComanda.innerHTML = '<i class="fa-solid fa-plus"></i> Añadir más platos';
+    const linkCobrar = document.createElement('a');
+    linkCobrar.href = `<?= BASE_URL ?>/roles/atencion/cobrar.php?pedido_id=${parseInt(p.id)}`;
+    linkCobrar.className = 'btn btn-exito btn-full';
+    linkCobrar.innerHTML = '<i class="fa-solid fa-sack-dollar"></i> Cobrar pedido';
+    botonesDiv.appendChild(linkComanda);
+    botonesDiv.appendChild(linkCobrar);
+    container.appendChild(botonesDiv);
 
-    document.getElementById('modal-detalle-body').innerHTML = html;
+    // Limpiar e insertar (un único DOM write)
+    const modalBody = document.getElementById('modal-detalle-body');
+    modalBody.innerHTML = '';
+    modalBody.appendChild(container);
 }
 
 async function eliminarItemDetalle(itemId, pedidoId, mesaId) {

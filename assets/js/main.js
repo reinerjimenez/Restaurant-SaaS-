@@ -159,10 +159,14 @@ function abrirModalOpcion(grupo, nombreProducto, paso, total) {
             const item = document.createElement('div');
             item.className = 'opcion-item';
             item.dataset.id = val.id;
-            item.innerHTML = `
-                <div class="opcion-radio"></div>
-                <span class="opcion-texto">${val.valor}</span>
-            `;
+            // — XSS: usar textContent para val.valor (dato del usuario) —
+            const radioDiv = document.createElement('div');
+            radioDiv.className = 'opcion-radio';
+            const textoSpan = document.createElement('span');
+            textoSpan.className = 'opcion-texto';
+            textoSpan.textContent = val.valor;   // textContent — no XSS
+            item.appendChild(radioDiv);
+            item.appendChild(textoSpan);
             item.addEventListener('click', () => {
                 lista.querySelectorAll('.opcion-item').forEach(i => i.classList.remove('selected'));
                 item.classList.add('selected');

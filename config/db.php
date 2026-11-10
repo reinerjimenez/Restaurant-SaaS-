@@ -122,6 +122,10 @@ function registrarAuditoria(PDO $db, string $accion, string $detalle = ''): void
 /**
  * Verifica sesión activa y rol permitido.
  * Si no cumple, redirige al login o devuelve JSON si es petición AJAX.
+ *
+ * H-020: Revalida contra la BD cada 60 s que el usuario siga activo,
+ * que su rol no haya cambiado, que su session_version coincida y que
+ * el restaurante siga activo. Cualquier discrepancia cierra la sesión.
  */
 function requireRole(array $rolesPermitidos): void {
     if (session_status() === PHP_SESSION_NONE) {
@@ -130,6 +134,65 @@ function requireRole(array $rolesPermitidos): void {
 
     $esAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) ||
               (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
+
+    // Función interna: destruye la sesión y redirige / responde JSON
+    $terminarSesion = function(string $motivo) use ($esAjax): never {
+        session_unset();
+        session_destroy();
+        if ($esAjax) {
+            jsonResponse(false, null, $motivo);
+        }
+        header('Location: ' . BASE_URL . '/index.php');
+        exit;
+    };
+
+    // Sin sesión — redirigir al login
+    if (!isset($_SESSION['usuario_id'])) {
+        $terminarSesion('No autorizado');
+    }
+
+    // — H-020: Revalidación periódica contra la BD (caché 60 s) —
+    $ahora = time();
+    if (empty($_SESSION['_last_revalidated']) || ($ahora - $_SESSION['_last_revalidated']) > 60) {
+        try {
+            $db  = getDB();
+            // Leer usuario y, si aplica, su restaurante en una sola consulta
+            $sql = "SELECT u.activo AS u_activo, u.rol,
+                           COALESCE(u.session_version, 1) AS session_version,
+                           r.activo AS r_activo
+                    FROM usuarios u
+                    LEFT JOIN restaurantes r ON r.id = u.restaurante_id
+                    WHERE u.id = ?
+                    LIMIT 1";
+            $st  = $db->prepare($sql);
+            $st->execute([$_SESSION['usuario_id']]);
+            $fila = $st->fetch();
+
+            if (!$fila) {
+                $terminarSesion('Tu cuenta ya no existe.');
+            }
+            if (!$fila['u_activo']) {
+                $terminarSesion('Tu cuenta está desactivada. Contacta al administrador.');
+            }
+            if ($fila['rol'] !== $_SESSION['rol']) {
+                $terminarSesion('Tu rol ha cambiado. Vuelve a iniciar sesión.');
+            }
+            // Invalidación por cambio de contraseña (session_version)
+            $svSesion = $_SESSION['session_version'] ?? 1;
+            if ((int)$fila['session_version'] !== (int)$svSesion) {
+                $terminarSesion('Tu sesión fue invalidada. Vuelve a iniciar sesión.');
+            }
+            // Si tiene restaurante asignado, verificar que el restaurante siga activo
+            if (!empty($_SESSION['restaurante_id']) && isset($fila['r_activo']) && !$fila['r_activo']) {
+                $terminarSesion('El restaurante está desactivado. Contacta al superadministrador.');
+            }
+
+            $_SESSION['_last_revalidated'] = $ahora;
+        } catch (Throwable $e) {
+            // Si la BD falla, no forzar logout — el sistema sigue con los datos de sesión
+            error_log('requireRole revalidation error: ' . $e->getMessage());
+        }
+    }
 
     // Permitir al superadmin cambiar el contexto del restaurante
     if (isset($_GET['set_rest_id']) && isset($_SESSION['rol']) && $_SESSION['rol'] === 'superadmin') {

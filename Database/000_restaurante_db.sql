@@ -608,6 +608,35 @@ INSERT INTO `usuarios` (`id`, `restaurante_id`, `nombre`, `email`, `password`, `
 --
 
 --
+-- Indices de la tabla `auditoria`
+-- (tabla creada en 001_rol_encargado.sql — incluida aquí como referencia del schema completo)
+--
+-- CREATE TABLE `auditoria` creada por 001_rol_encargado.sql:
+-- id INT AUTO_INCREMENT PK, restaurante_id INT, usuario_id INT,
+-- usuario_nombre VARCHAR(100), accion VARCHAR(120), detalle TEXT,
+-- ip VARCHAR(45), created_at TIMESTAMP DEFAULT current_timestamp()
+-- ENGINE=InnoDB CHARSET=utf8mb4
+
+--
+-- Tabla `comprobante_items` — referencia del schema completo
+--
+-- CREATE TABLE `comprobante_items` (
+--   `id` int(11) NOT NULL AUTO_INCREMENT,
+--   `comprobante_id` int(11) NOT NULL,
+--   `descripcion` varchar(200) NOT NULL,
+--   `cantidad` int(11) NOT NULL DEFAULT 1,
+--   `precio_unitario` decimal(10,2) NOT NULL,
+--   `subtotal` decimal(10,2) NOT NULL,
+--   PRIMARY KEY (`id`),
+--   KEY `comprobante_id` (`comprobante_id`),
+--   FOREIGN KEY (`comprobante_id`) REFERENCES `comprobantes`(`id`) ON DELETE CASCADE
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Índices para tablas volcadas
+--
+
+--
 -- Indices de la tabla `categorias`
 --
 ALTER TABLE `categorias`

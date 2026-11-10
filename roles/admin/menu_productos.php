@@ -205,7 +205,10 @@ function nuevoProducto() {
 function editarProducto(prod) {
     modoEdicionProd = true;
     opcGrupos = [];
-    document.getElementById('modal-prod-titulo').innerHTML = '<i class="fa-solid fa-pen"></i> Editar: ' + prod.nombre;
+    // — XSS: usar textContent para prod.nombre (dato del usuario) —
+    const tituloEl = document.getElementById('modal-prod-titulo');
+    tituloEl.innerHTML = '<i class="fa-solid fa-pen"></i> Editar: ';
+    tituloEl.appendChild(document.createTextNode(prod.nombre));
     document.getElementById('prod-id').value          = prod.id;
     document.getElementById('prod-categoria').value   = prod.categoria_id;
     document.getElementById('prod-nombre').value      = prod.nombre;
@@ -274,16 +277,26 @@ function agregarValorRender(grupoIdx, valIdx, valor) {
     const cont = document.getElementById(`valores-${grupoIdx}`);
     const row  = document.createElement('div');
     row.style.cssText = 'display:flex;gap:8px;align-items:center;';
-    row.innerHTML = `
-        <input type="text" placeholder="Ej: Con Fideos" class="form-control"
-            style="flex:1;min-height:38px;font-size:.875rem;"
-            value="${valor}"
-            oninput="opcGrupos[${grupoIdx}].valores[${valIdx}] = this.value">
-        <button type="button" onclick="this.parentElement.remove(); opcGrupos[${grupoIdx}].valores.splice(${valIdx},1);"
-            style="background:none;border:none;color:var(--danger);font-size:.875rem;cursor:pointer;padding:4px;min-height:38px;display:flex;align-items:center;">
-            <i class="fa-solid fa-minus-circle"></i>
-        </button>
-    `;
+    // — XSS: construir el input de opciones sin interpolación de datos de usuario —
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Ej: Con Fideos';
+    input.className = 'form-control';
+    input.style.cssText = 'flex:1;min-height:38px;font-size:.875rem;';
+    input.value = valor;   // .value asigna como texto plano — sin XSS
+    input.addEventListener('input', function() {
+        opcGrupos[grupoIdx].valores[valIdx] = this.value;
+    });
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.style.cssText = 'background:none;border:none;color:var(--danger);font-size:.875rem;cursor:pointer;padding:4px;min-height:38px;display:flex;align-items:center;';
+    removeBtn.innerHTML = '<i class="fa-solid fa-minus-circle"></i>';
+    removeBtn.addEventListener('click', function() {
+        row.remove();
+        opcGrupos[grupoIdx].valores.splice(valIdx, 1);
+    });
+    row.appendChild(input);
+    row.appendChild(removeBtn);
     cont.appendChild(row);
 }
 

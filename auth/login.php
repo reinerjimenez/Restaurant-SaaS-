@@ -24,7 +24,8 @@ if (empty($email) || empty($password)) {
 try {
     $db   = getDB();
     $stmt = $db->prepare(
-        "SELECT id, restaurante_id, nombre, email, password, rol, activo
+        "SELECT id, restaurante_id, nombre, email, password, rol, activo,
+                COALESCE(session_version, 1) AS session_version
          FROM usuarios
          WHERE email = :email
          LIMIT 1"
@@ -44,17 +45,32 @@ try {
         exit;
     }
 
+    // — H-020: Verificar que el restaurante del usuario siga activo —
+    if (!empty($usuario['restaurante_id'])) {
+        $stRest = $db->prepare("SELECT activo FROM restaurantes WHERE id = ? LIMIT 1");
+        $stRest->execute([$usuario['restaurante_id']]);
+        $rest = $stRest->fetch();
+        if (!$rest || !$rest['activo']) {
+            $_SESSION['login_error'] = 'El restaurante está desactivado. Contacta al superadministrador.';
+            header('Location: ' . BASE_URL . '/index.php');
+            exit;
+        }
+    }
+
     // Registrar acceso en logs
     $log = $db->prepare("INSERT INTO logs_acceso (usuario_id, accion, ip) VALUES (?, 'login', ?)");
     $log->execute([$usuario['id'], $_SERVER['REMOTE_ADDR'] ?? 'unknown']);
 
     // Iniciar sesión
     session_regenerate_id(true);
-    $_SESSION['usuario_id']     = $usuario['id'];
-    $_SESSION['restaurante_id'] = $usuario['restaurante_id'];
-    $_SESSION['nombre']         = $usuario['nombre'];
-    $_SESSION['email']          = $usuario['email'];
-    $_SESSION['rol']            = $usuario['rol'];
+    $_SESSION['usuario_id']        = $usuario['id'];
+    $_SESSION['restaurante_id']    = $usuario['restaurante_id'];
+    $_SESSION['nombre']            = $usuario['nombre'];
+    $_SESSION['email']             = $usuario['email'];
+    $_SESSION['rol']               = $usuario['rol'];
+    // — H-020: guardar session_version para detectar cambios de contraseña/rol —
+    $_SESSION['session_version']   = (int)$usuario['session_version'];
+    $_SESSION['_last_revalidated'] = time();
 
     registrarAuditoria($db, 'Inició sesión');
 

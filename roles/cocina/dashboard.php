@@ -203,60 +203,109 @@ function renderPedidos(pedidos) {
         const todosLosIdsJson = JSON.stringify(todosLosIds);
 
         const grupos = agruparItems(p.items || []);
-        let itemsHTML = '';
+        // — XSS: Construir ítems de cocina con DOM (nombre, opciones y notas son datos de usuario) —
+        const ckItemsContainer = document.createElement('div');
+        ckItemsContainer.className = 'ck-items';
 
         grupos.forEach(grupo => {
             const estadoClass = grupo.estado || 'pendiente';
-            // Solo mostramos pendiente o listo visualmente
-            const iconHTML = (estadoClass === 'listo') 
-                ? '<i class="fa-solid fa-circle-check" style="color:var(--success)"></i>' 
+            const idsArray    = JSON.parse(JSON.stringify(grupo.ids)); // copia limpia de enteros
+
+            const ckItem = document.createElement('div');
+            ckItem.className = 'ck-item';
+
+            const qtyDiv = document.createElement('div');
+            qtyDiv.className = 'ck-qty';
+            qtyDiv.textContent = grupo.cantidad;
+
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'ck-item-info';
+
+            const nombreDiv = document.createElement('div');
+            nombreDiv.className = 'ck-nombre';
+            nombreDiv.textContent = grupo.nombre;         // textContent — sin XSS
+            infoDiv.appendChild(nombreDiv);
+
+            if (grupo.opciones) {
+                const opDiv = document.createElement('div');
+                opDiv.className = 'ck-opciones';
+                opDiv.textContent = `· ${grupo.opciones}`; // textContent — sin XSS
+                infoDiv.appendChild(opDiv);
+            }
+            if (grupo.notas) {
+                const notaDiv = document.createElement('div');
+                notaDiv.className = 'ck-opciones';
+                const noteIcon = document.createElement('i');
+                noteIcon.className = 'fa-solid fa-note-sticky';
+                notaDiv.appendChild(noteIcon);
+                notaDiv.appendChild(document.createTextNode(` ${grupo.notas}`)); // sin XSS
+                infoDiv.appendChild(notaDiv);
+            }
+
+            const listoBtn = document.createElement('button');
+            listoBtn.className = `ck-btn-listo ck-btn ${estadoClass === 'listo' ? 'listo' : 'pendiente'}`;
+            listoBtn.title = estadoClass === 'listo'
+                ? 'Listo (click para ocultar)'
+                : 'Pendiente (click para marcar listo)';
+            listoBtn.innerHTML = estadoClass === 'listo'
+                ? '<i class="fa-solid fa-circle-check" style="color:var(--success)"></i>'
                 : '<i class="fa-solid fa-hourglass-half"></i>';
+            // IDs son enteros del servidor — seguros; estado es enum del servidor
+            listoBtn.dataset.ids    = JSON.stringify(idsArray);
+            listoBtn.dataset.estado = estadoClass;
+            listoBtn.addEventListener('click', function() {
+                cambiarEstadoItem(this, JSON.parse(this.dataset.ids), this.dataset.estado);
+            });
 
-            const idsJson = JSON.stringify(grupo.ids);
-
-            itemsHTML += `
-                <div class="ck-item">
-                    <div class="ck-qty">${grupo.cantidad}</div>
-                    <div class="ck-item-info">
-                        <div class="ck-nombre">${grupo.nombre}</div>
-                        ${grupo.opciones ? `<div class="ck-opciones">· ${grupo.opciones}</div>` : ''}
-                        ${grupo.notas   ? `<div class="ck-opciones"><i class="fa-solid fa-note-sticky"></i> ${grupo.notas}</div>` : ''}
-                    </div>
-                    <button class="ck-btn-listo ck-btn ${estadoClass === 'listo' ? 'listo' : 'pendiente'}"
-                        title="${estadoClass === 'listo' ? 'Listo (click para ocultar)' : 'Pendiente (click para marcar listo)'}"
-                        onclick="cambiarEstadoItem(this, ${idsJson}, '${estadoClass}')">
-                        ${iconHTML}
-                    </button>
-                </div>`;
+            ckItem.appendChild(qtyDiv);
+            ckItem.appendChild(infoDiv);
+            ckItem.appendChild(listoBtn);
+            ckItemsContainer.appendChild(ckItem);
         });
 
         const tipoColor = p.tipo === 'aqui' ? 'var(--info)' : 'var(--warning)';
-        const tipoBg = p.tipo === 'aqui' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(250, 204, 21, 0.15)';
+        const tipoBg    = p.tipo === 'aqui' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(250, 204, 21, 0.15)';
 
+        // Cabecera de la card: mesa_numero e id son enteros del servidor; tipo es enum
         card.innerHTML = `
             <div class="cocina-card-header">
                 <div>
-                    <div class="ck-mesa">${p.mesa_numero ? 'Mesa ' + p.mesa_numero : 'Llevar'}</div>
+                    <div class="ck-mesa">${p.mesa_numero ? 'Mesa ' + parseInt(p.mesa_numero) : 'Llevar'}</div>
                     <div class="ck-tipo" style="margin-top:2px;">
                         <span style="color: ${tipoColor}; background: ${tipoBg}; padding: 1px 3px; border-radius: 4px; font-weight: bold; font-size: 0.6rem; display: inline-flex; align-items: center; gap: 2px;">
                             <i class="fa-solid ${p.tipo === 'aqui' ? 'fa-house' : 'fa-bag-shopping'}"></i>
                             ${p.tipo === 'aqui' ? 'Comer aquí' : 'Para llevar'}
                         </span>
-                        <span style="opacity: 0.7; margin-left: 4px; font-size: 0.6rem;">· #${p.id}</span>
+                        <span style="opacity: 0.7; margin-left: 4px; font-size: 0.6rem;">· #${parseInt(p.id)}</span>
                     </div>
                 </div>
-                <div class="ck-tiempo">${minutos} min${urgente ? ' <i class="fa-solid fa-triangle-exclamation"></i>' : ''}</div>
-            </div>
-            <div class="ck-items">${itemsHTML}</div>
-            <div class="ck-card-footer" style="padding: 6px; background: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;">
-                <button class="ck-btn ${todosListos ? 'listo' : 'pendiente'}" 
-                        style="width: 100%; padding: 6px 4px; font-size: 0.75rem; border-radius: 6px; cursor: pointer; border: none; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;"
-                        title="${todosListos ? 'Despachar todos los platos de esta comanda' : 'Marcar todos los platos de esta comanda como listos'}"
-                        onclick="cambiarEstadoItem(this, ${todosLosIdsJson}, '${todosListos ? 'listo' : 'pendiente'}')">
-                    <i class="fa-solid ${todosListos ? 'fa-circle-check' : 'fa-check-double'}"></i>
-                    ${todosListos ? 'Despachar Comanda' : 'Marcar Todo Listo'}
-                </button>
+                <div class="ck-tiempo">${parseInt(minutos)} min${urgente ? ' <i class="fa-solid fa-triangle-exclamation"></i>' : ''}</div>
             </div>`;
+
+        // Insertar ítems (DOM seguro) después del header
+        card.appendChild(ckItemsContainer);
+
+        // Footer: botón "marcar todo / despachar" — IDs son enteros, estado es enum
+        const footer = document.createElement('div');
+        footer.className = 'ck-card-footer';
+        footer.style.cssText = 'padding: 6px; background: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;';
+
+        const todoBtn = document.createElement('button');
+        todoBtn.className = `ck-btn ${todosListos ? 'listo' : 'pendiente'}`;
+        todoBtn.style.cssText = 'width: 100%; padding: 6px 4px; font-size: 0.75rem; border-radius: 6px; cursor: pointer; border: none; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;';
+        todoBtn.title = todosListos
+            ? 'Despachar todos los platos de esta comanda'
+            : 'Marcar todos los platos de esta comanda como listos';
+        todoBtn.dataset.ids    = JSON.stringify(todosLosIds);
+        todoBtn.dataset.estado = todosListos ? 'listo' : 'pendiente';
+        todoBtn.innerHTML = `<i class="fa-solid ${todosListos ? 'fa-circle-check' : 'fa-check-double'}"></i>
+                             ${todosListos ? 'Despachar Comanda' : 'Marcar Todo Listo'}`;
+        todoBtn.addEventListener('click', function() {
+            cambiarEstadoItem(this, JSON.parse(this.dataset.ids), this.dataset.estado);
+        });
+
+        footer.appendChild(todoBtn);
+        card.appendChild(footer);
 
         grid.appendChild(card);
     });

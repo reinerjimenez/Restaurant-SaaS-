@@ -1,2 +1,8 @@
 graphify-out/cache/
 graphify-out/.graphify*
+
+# Secretos — NUNCA subir al repositorio
+.env
+
+# Assets generados / cache
+assets/logos/
