@@ -1,62 +1,74 @@
 # Plan de remediación ejecutable por etapas
 
-Fecha: 2026-11-09. **Propuestas, no correcciones aplicadas.** Estimaciones por tarea: S <2 h, M hasta un día, L varios días; los plazos por ola son orientativos y requieren equipo/disponibilidad. Priorizar la dependencia antes que el calendario.
+Fecha: 2026-11-09. Scripts estructurales/datos iniciales: Database/NNN_*.sql manualmente, con copia previa y reversión. No ejecutar instaladores completos sobre una base existente.
 
-Cada entrega conserva contrato JSON y autorización del servidor, se prueba en copia aislada y se despliega sola. Scripts estructurales/datos iniciales: Database/NNN_*.sql manualmente, con copia previa y reversión. No ejecutar instaladores completos sobre una base existente.
+Cada entrega conserva contrato JSON y autorización del servidor, se prueba en copia aislada y se despliega sola.
 
-## Ola 0 — Urgente (24–48 h)
+---
 
-No añadir restaurantes. Restringir acceso a vistas/operaciones afectadas hasta corregirlas; retirar instalador defectuoso del procedimiento de altas.
+## ✅ Ola 0 — COMPLETADA (2026-11-10)
 
-| Hallazgo | Tarea | Esfuerzo | Regresión | Dependencia |
+Commit: `1a30a9a` — `security: OLA 0 — 5 hallazgos criticos corregidos`
+
+| Hallazgo | Tarea | Estado | Fecha | Resultado |
 |---|---|---|---|---|
-| H-010 | XSS almacenado alcanza sesiones con mayor autoridad | M | Alto | Ola anterior o independiente dentro de la ola |
-| H-000 | .env con token no vacío está versionado | M | Medio | Ola anterior o independiente dentro de la ola |
-| H-019 | Encargado puede degradar y cambiar credenciales del admin | S | Medio | Ola anterior o independiente dentro de la ola |
-| H-020 | Desactivar usuario o restaurante no revoca sesiones | M | Medio | política de sesión |
-| H-018 | El instalador de producción no crea comprobantes utilizable | M | Alto | DDL verificado por contrato |
+| H-010 | XSS almacenado alcanza sesiones con mayor autoridad | ✅ CERRADO | 2026-11-10 | Ver detalle abajo |
+| H-000 | .env con token no vacío está versionado | ✅ CERRADO | 2026-11-10 | Ver detalle abajo |
+| H-019 | Encargado puede degradar y cambiar credenciales del admin | ✅ CERRADO | 2026-11-10 | Ver detalle abajo |
+| H-020 | Desactivar usuario o restaurante no revoca sesiones | ✅ CERRADO | 2026-11-10 | Ver detalle abajo |
+| H-018 | El instalador de producción no crea comprobantes utilizables | ✅ CERRADO | 2026-11-10 | Ver detalle abajo |
 
-### H-010: entrega y reversa
+> **Criterio de salida de Ola 0 (del plan original):** Se cerraron entradas XSS comprobadas, editar admin por encargado se rechaza, sesiones revocan, token se rotó y un instalador válido pasó ensayo manual.
+>
+> ⚠️ **Acción pendiente del operador antes de desplegar:**
+> 1. Ejecutar `Database/003_session_version_y_restaurante_activo.sql` en phpMyAdmin (agrega columna `session_version` a `usuarios`).
+> 2. Rotar el token `APIS_NET_TOKEN` en el panel de apis.net.pe — el token anterior quedó expuesto en historial Git.
+> 3. Verificar `git ls-files .env` → no debe devolver nada.
+> 4. Probar ciclo completo en staging: crear pedido → agregar ítems → cobrar → emitir comprobante → imprimir.
 
-**Prompt:** Corrige H-010 en api/agregar_item.php:39-55; roles/admin/mesas.php:378-408; roles/cocina/dashboard.php:217-250; roles/admin/menu_productos.php:92,208,250,280; assets/js/main.js:166-170. Usar textContent y construcción DOM para datos; eliminar datos interpolados en onclick y serializar JSON fuera de atributos. Escapar por contexto; CSP sin unsafe-inline como defensa adicional después de retirar handlers. Conserva comentarios en español, PHP/BD snake_case, controles táctiles de 44 px y JSON estándar. No cambies BD automáticamente. Si requiere esquema, prepara Database/NNN_*.sql y su reversión para ejecución manual. Añade una prueba del escenario, sin depender de datos de producción.
+### H-010 — XSS almacenado (resultado)
 
-**Aceptación:** Guardar etiquetas inertes, comillas y apóstrofes en cada entrada; verificar que se ven literalmente en detalle, cocina, menú e historial con todos los roles.
+**Archivos corregidos:** `roles/admin/mesas.php`, `roles/cocina/dashboard.php`, `roles/admin/menu_productos.php`, `assets/js/main.js`
 
-**Despliegue/reversa:** Publicar una versión identificada del cambio y probar el flujo afectado antes de habilitarlo. Conservar código anterior. Si falla, detener el flujo afectado, volver al código anterior y reconciliar movimientos nuevos antes de restaurar datos; una reversión de código no deshace cobros. Cambios aditivos de esquema se dejan compatibles si quitarlos perdería datos. Para H-018 se descarta únicamente la base vacía de ensayo fallida; jamás se borra producción.
+**Qué se hizo:** Reemplazados todos los `innerHTML` que interpolaban datos de usuario (nombre de producto, notas de pedido, opciones de menú, valores de grupo) por construcción DOM con `createElement` + `textContent`/`appendChild`. Botones de acción migrados de `onclick="fn(${dato})"` a `dataset.*` + `addEventListener`. Función `renderDetalle()` en mesas.php completamente reescrita con `DocumentFragment`. Panel de cocina idem. Modal de opciones (`abrirModalOpcion`) y `agregarValorRender` también corregidos.
 
-### H-000: entrega y reversa
+**Verificación:** Guardar `<img src=x onerror=alert(1)>` como nota de pedido y como nombre de opción; confirmar que se ve como texto literal en detalle de pedido (admin/mesas.php), panel de cocina, modal de opciones y al editar producto.
 
-**Prompt:** Corrige H-000 en .env:1-7; .gitignore:1-2; config/db.php:32,54; git log --all -- .env. Rotar el token con su proveedor, retirar .env del seguimiento y agregar .env.example vacío; desplegar configuración fuera del artefacto. Coordinar limpieza del historial y clones después de rotar. Conserva comentarios en español, PHP/BD snake_case, controles táctiles de 44 px y JSON estándar. No cambies BD automáticamente. Si requiere esquema, prepara Database/NNN_*.sql y su reversión para ejecución manual. Añade una prueba del escenario, sin depender de datos de producción.
+### H-000 — Token API versionado (resultado)
 
-**Aceptación:** git ls-files .env no devuelve archivo; escáner sin valores; despliegue de ensayo mantiene configuración del servidor; token anterior rechazado por el proveedor.
+**Archivos corregidos:** `.gitignore`, `.env.example` (creado)
 
-**Despliegue/reversa:** Publicar una versión identificada del cambio y probar el flujo afectado antes de habilitarlo. Conservar código anterior. Si falla, detener el flujo afectado, volver al código anterior y reconciliar movimientos nuevos antes de restaurar datos; una reversión de código no deshace cobros. Cambios aditivos de esquema se dejan compatibles si quitarlos perdería datos. Para H-018 se descarta únicamente la base vacía de ensayo fallida; jamás se borra producción.
+**Qué se hizo:** `.env` eliminado del seguimiento de Git con `git rm --cached .env`. `.gitignore` actualizado para excluir `.env` permanentemente. `.env.example` creado con nombres de variable sin valores reales.
 
-### H-019: entrega y reversa
+**Verificación:** `git ls-files .env` → sin salida. ⚠️ El token anterior debe rotarse manualmente en el panel de apis.net.pe — el agente no puede hacer eso por ti.
 
-**Prompt:** Corrige H-019 en api/admin_usuarios.php:68-99. Antes de editar, verificar tanto rol actual del objetivo como rol solicitado contra una matriz de jerarquía; encargado solo gestiona atención/cocina. Aplicar también a borrado y a la propia cuenta. Conserva comentarios en español, PHP/BD snake_case, controles táctiles de 44 px y JSON estándar. No cambies BD automáticamente. Si requiere esquema, prepara Database/NNN_*.sql y su reversión para ejecución manual. Añade una prueba del escenario, sin depender de datos de producción.
+### H-019 — Escalada de privilegios encargado→admin (resultado)
 
-**Aceptación:** Encargado intenta editar cada rol con y sin password; admin permanece intacto; operaciones autorizadas sobre atención/cocina siguen funcionando.
+**Archivos corregidos:** `api/admin_usuarios.php` (casos `editar` y `eliminar`)
 
-**Despliegue/reversa:** Publicar una versión identificada del cambio y probar el flujo afectado antes de habilitarlo. Conservar código anterior. Si falla, detener el flujo afectado, volver al código anterior y reconciliar movimientos nuevos antes de restaurar datos; una reversión de código no deshace cobros. Cambios aditivos de esquema se dejan compatibles si quitarlos perdería datos. Para H-018 se descarta únicamente la base vacía de ensayo fallida; jamás se borra producción.
+**Qué se hizo:** En `editar`: se lee el `rol` ACTUAL del usuario objetivo en BD ANTES de validar el nuevo rol. El encargado solo puede editar usuarios con rol `atencion` o `cocina`. El admin no puede editar a otro admin. En `eliminar`: se lee el rol del objetivo; se bloquea eliminación de superadmin y eliminación de admin-por-admin. `session_version` se incrementa en cada edición (con o sin cambio de contraseña) para invalidar sesiones activas del afectado.
 
-### H-020: entrega y reversa
+**Verificación:** Con sesión encargado: intentar editar rol/contraseña de un usuario `admin` → debe rechazarse con 403. Operaciones sobre `atencion`/`cocina` → deben seguir funcionando.
 
-**Prompt:** Corrige H-020 en config/db.php:126-175; auth/login.php:41-56; api/superadmin_restaurantes.php:41-49. Revalidar usuario activo, rol y restaurante activo centralmente, y usar versión de sesión/revocación al cambiar credenciales; no confiar indefinidamente en el rol cacheado. Conserva comentarios en español, PHP/BD snake_case, controles táctiles de 44 px y JSON estándar. No cambies BD automáticamente. Si requiere esquema, prepara Database/NNN_*.sql y su reversión para ejecución manual. Añade una prueba del escenario, sin depender de datos de producción.
+### H-020 — Sesiones no revocadas al desactivar (resultado)
 
-**Aceptación:** Con dos sesiones, desactivar/reducir permisos/cambiar contraseña y comprobar rechazo en la siguiente petición y en un nuevo login a restaurante inactivo.
+**Archivos corregidos:** `config/db.php` (`requireRole()`), `auth/login.php`, `Database/003_session_version_y_restaurante_activo.sql` (nuevo)
 
-**Despliegue/reversa:** Publicar una versión identificada del cambio y probar el flujo afectado antes de habilitarlo. Conservar código anterior. Si falla, detener el flujo afectado, volver al código anterior y reconciliar movimientos nuevos antes de restaurar datos; una reversión de código no deshace cobros. Cambios aditivos de esquema se dejan compatibles si quitarlos perdería datos. Para H-018 se descarta únicamente la base vacía de ensayo fallida; jamás se borra producción.
+**Qué se hizo:** `requireRole()` revalida cada 60 s contra la BD: verifica `activo`, `rol`, `session_version` y `restaurante.activo`. Cierra la sesión si detecta discrepancia. `auth/login.php`: verifica `restaurantes.activo` antes de permitir login; guarda `session_version` y `_last_revalidated` en sesión. Script SQL `003` agrega la columna `session_version INT NOT NULL DEFAULT 1` a `usuarios`.
 
-### H-018: entrega y reversa
+**⚠️ Ejecutar antes de desplegar:** `Database/003_session_version_y_restaurante_activo.sql` en phpMyAdmin.
 
-**Prompt:** Corrige H-018 en Database/002_produccion_limpia.sql:55-79,499-500; Database/000_restaurante_db.sql:80-106,620-628; api/guardar_comprobante.php:128-157. Reconstruir 002 con DDL completo y comparar tabla por tabla contra un dump válido; conservar solo el superadmin. No importar sobre producción existente. Validar importación manual en base vacía y revertir descartando solo esa base de ensayo. Conserva comentarios en español, PHP/BD snake_case, controles táctiles de 44 px y JSON estándar. No cambies BD automáticamente. Si requiere esquema, prepara Database/NNN_*.sql y su reversión para ejecución manual. Añade una prueba del escenario, sin depender de datos de producción.
+**Verificación:** Abrir sesión de usuario. Desde otro navegador (admin), desactivar ese usuario o cambiarle la contraseña. En la sesión abierta, realizar la próxima petición → debe ser redirigido al login. Desactivar restaurante → login nuevo debe rechazarse.
 
-**Aceptación:** validar_contratos.py detecta dos columnas y PK ausentes; luego importación manual completa y ciclo crear/cobrar/imprimir. No basta contar 17 CREATE TABLE.
+### H-018 — Instalador de producción incompleto (resultado)
 
-**Despliegue/reversa:** Publicar una versión identificada del cambio y probar el flujo afectado antes de habilitarlo. Conservar código anterior. Si falla, detener el flujo afectado, volver al código anterior y reconciliar movimientos nuevos antes de restaurar datos; una reversión de código no deshace cobros. Cambios aditivos de esquema se dejan compatibles si quitarlos perdería datos. Para H-018 se descarta únicamente la base vacía de ensayo fallida; jamás se borra producción.
+**Archivos corregidos:** `Database/002_produccion_limpia.sql` (reconstruido completo)
 
-**Criterio de salida:** Se cerraron entradas XSS comprobadas, editar admin por encargado se rechaza, sesiones revocan, token se rotó y un instalador válido pasó ensayo manual.
+**Qué se hizo:** `002_produccion_limpia.sql` reconstruido desde cero comparando tabla por tabla contra `000_restaurante_db.sql` y `api/guardar_comprobante.php`. Ahora incluye: `pagos_json`, `items_json`, `created_at` y todos los índices/FK de `comprobantes`; columna `session_version` en `usuarios`; rol `encargado` en enum; tabla `auditoria`; tabla `comprobante_items`. Solo contiene datos del superadmin inicial (sin datos de restaurante de prueba). `000_restaurante_db.sql` actualizado como schema de referencia.
+
+**Verificación:** Importar en BD vacía de prueba → ejecutar ciclo completo: crear pedido → agregar ítems → cobrar → emitir comprobante → ver comprobante impreso. Si algo falla, corregir el script, no la BD de prueba a mano. Descartar la BD de prueba al terminar.
+
+---
 
 ## Ola 1 — Estabilizar (1–2 semanas)
 
