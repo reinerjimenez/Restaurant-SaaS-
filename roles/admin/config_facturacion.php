@@ -4,7 +4,6 @@
  * Configuración de identidad de marca y datos de facturación del restaurante.
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'superadmin']);
 
@@ -160,6 +159,7 @@ require_once '../../includes/header.php';
 
             <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+                <?= campos_contexto_restaurante() ?>
 
                 <!-- ══ SECCIÓN 1: IDENTIDAD VISUAL ══════════════════════════ -->
                 <div class="card mb-20">

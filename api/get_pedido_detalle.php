@@ -4,7 +4,6 @@
  * Usado por historial.php para el modal de detalle
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin', 'atencion']);
 
@@ -22,7 +21,7 @@ $stPed = $db->prepare("
            pe.created_at,
            m.numero AS mesa_numero
     FROM pedidos pe
-    LEFT JOIN mesas m ON m.id = pe.mesa_id
+    LEFT JOIN mesas m ON m.id = pe.mesa_id AND m.restaurante_id = pe.restaurante_id
     WHERE pe.id = ? AND pe.restaurante_id = ?
 ");
 $stPed->execute([$pedidoId, $restauranteId]);
@@ -45,9 +44,17 @@ $stItems = $db->prepare("
 $stItems->execute([$pedidoId]);
 $pedido['items'] = $stItems->fetchAll();
 
-// Pagos
-$stPagos = $db->prepare("SELECT metodo, monto, referencia FROM pagos WHERE pedido_id = ? ORDER BY id");
-$stPagos->execute([$pedidoId]);
+// Pagos efectivos y su cobrador, independientemente del creador del pedido.
+$stPagos = $db->prepare("
+    SELECT pa.metodo, pa.monto, pa.referencia, pa.created_at,
+           pa.usuario_id AS cobrador_id, COALESCE(u.nombre, 'Usuario no disponible') AS cobrador
+    FROM pagos pa
+    JOIN pedidos pe ON pe.id = pa.pedido_id
+    LEFT JOIN usuarios u ON u.id = pa.usuario_id
+    WHERE pa.pedido_id = ? AND pe.restaurante_id = ? AND COALESCE(pa.anulado, 0) = 0
+    ORDER BY pa.id
+");
+$stPagos->execute([$pedidoId, $restauranteId]);
 $pedido['pagos'] = $stPagos->fetchAll();
 
 jsonResponse(true, $pedido, 'OK');

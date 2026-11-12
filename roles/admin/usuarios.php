@@ -3,8 +3,7 @@
  * roles/admin/usuarios.php — Gestión de usuarios del restaurante
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
-require_once '../../config/db.php';
+require_once __DIR__ . '/../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
@@ -141,7 +140,7 @@ require_once '../../includes/header.php';
                 <div class="form-group" id="grp-password">
                     <label class="form-label"><span id="lbl-pass">Contraseña</span></label>
                     <div style="position:relative;">
-                        <input type="password" id="usr-password" class="form-control" style="padding-right:48px;" placeholder="Mín. 6 caracteres" autocomplete="new-password">
+                        <input type="password" id="usr-password" class="form-control" style="padding-right:48px;" placeholder="Mín. 12 caracteres" autocomplete="new-password">
                         <button type="button" onclick="alternarPassword('usr-password', this)" aria-label="Mostrar contraseña" title="Mostrar contraseña" style="position:absolute;right:0;top:50%;transform:translateY(-50%);width:44px;height:44px;border:0;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;">
                             <i class="fa-solid fa-eye"></i>
                         </button>
@@ -225,8 +224,8 @@ async function guardarUsuario() {
         activo:   document.getElementById('usr-activo').value,
     };
 
-    if (!modoEdicionUsr && datos.password.length < 6) {
-        Toast.advertencia('La contraseña debe tener al menos 6 caracteres');
+    if ((!modoEdicionUsr || datos.password !== '') && Array.from(datos.password).length < 12) {
+        Toast.advertencia('La contraseña debe tener al menos 12 caracteres');
         btn.disabled = false;
         return;
     }

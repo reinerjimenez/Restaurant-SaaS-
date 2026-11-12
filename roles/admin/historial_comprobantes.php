@@ -4,7 +4,6 @@
  * Historial de comprobantes con filtros, búsqueda y anulación.
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 

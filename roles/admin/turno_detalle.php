@@ -3,7 +3,6 @@
  * roles/admin/turno_detalle.php
  * Vista detallada de un turno cerrado.
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 
@@ -32,58 +31,13 @@ if (!$turno) {
     exit;
 }
 
-// Obtener gastos del turno
-$stGastos = $db->prepare("SELECT COALESCE(SUM(monto), 0) FROM gastos WHERE restaurante_id = ? AND created_at BETWEEN ? AND ? AND activo = 1");
-$stGastos->execute([$restauranteId, $turno['inicio'], $turno['fin']]);
-$gastosTotal = $stGastos->fetchColumn();
+require_once __DIR__ . '/../../includes/reportes_financieros.php';
 
-// Obtener num_pedidos
-$stPedidos = $db->prepare("SELECT COUNT(id) FROM pedidos WHERE restaurante_id = ? AND estado = 'cobrado' AND updated_at BETWEEN ? AND ?");
-$stPedidos->execute([$restauranteId, $turno['inicio'], $turno['fin']]);
-$numPedidos = $stPedidos->fetchColumn();
-
-// Desglose por usuario
-$stUsuarios = $db->prepare("
-    SELECT 
-        u.id,
-        u.nombre AS usuario,
-        COALESCE(v.total_efectivo, 0) AS total_efectivo,
-        COALESCE(v.total_yape, 0) AS total_yape,
-        COALESCE(v.total_transferencia, 0) AS total_transferencia,
-        COALESCE(v.total_tarjeta, 0) AS total_tarjeta,
-        COALESCE(v.total_otros, 0) AS total_otros,
-        COALESCE(v.total_general, 0) AS total_general,
-        COALESCE(g.total_gastos, 0) AS total_gastos
-    FROM usuarios u
-    LEFT JOIN (
-        SELECT
-            pe.usuario_id,
-            SUM(CASE WHEN p.metodo = 'efectivo' THEN p.monto ELSE 0 END) AS total_efectivo,
-            SUM(CASE WHEN p.metodo = 'yape' THEN p.monto ELSE 0 END) AS total_yape,
-            SUM(CASE WHEN p.metodo = 'transferencia' THEN p.monto ELSE 0 END) AS total_transferencia,
-            SUM(CASE WHEN p.metodo = 'tarjeta' THEN p.monto ELSE 0 END) AS total_tarjeta,
-            SUM(CASE WHEN p.metodo = 'otros' THEN p.monto ELSE 0 END) AS total_otros,
-            COALESCE(SUM(p.monto), 0) AS total_general
-        FROM pedidos pe
-        LEFT JOIN pagos p ON p.pedido_id = pe.id AND p.anulado = 0
-        WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado' AND pe.updated_at BETWEEN ? AND ?
-        GROUP BY pe.usuario_id
-    ) v ON v.usuario_id = u.id
-    LEFT JOIN (
-        SELECT usuario_id, SUM(monto) AS total_gastos
-        FROM gastos
-        WHERE restaurante_id = ? AND created_at BETWEEN ? AND ? AND activo = 1
-        GROUP BY usuario_id
-    ) g ON g.usuario_id = u.id
-    WHERE u.restaurante_id = ? AND (v.usuario_id IS NOT NULL OR g.usuario_id IS NOT NULL)
-    ORDER BY total_general DESC, u.nombre
-");
-$stUsuarios->execute([
-    $restauranteId, $turno['inicio'], $turno['fin'],
-    $restauranteId, $turno['inicio'], $turno['fin'],
-    $restauranteId
-]);
-$desgloseUsuarios = $stUsuarios->fetchAll();
+// Un cierre se muestra tal como fue guardado; los legados solo tienen totales por método.
+$cierre = leer_cierre_turno($turno);
+$gastosTotal = $cierre['total_gastos'] ?? null;
+$numPedidos = $cierre['num_pedidos'] ?? null;
+$desgloseUsuarios = $cierre['desglose_usuarios'] ?? [];
 
 $pageTitle = 'Detalles del Turno';
 $activeMenu = 'caja';
@@ -92,7 +46,7 @@ require_once '../../includes/header.php';
 
 <div class="page-content">
     <div style="margin-bottom:24px;display:flex;align-items:center;gap:12px;">
-        <a href="caja.php" class="btn btn-ghost" style="padding:8px;border-radius:50%;"><i class="fa-solid fa-arrow-left"></i></a>
+        <a href="caja.php" class="btn btn-ghost" style="padding:8px;border-radius:50%;min-width:44px;min-height:44px;"><i class="fa-solid fa-arrow-left"></i></a>
         <div>
             <h1 style="font-size:1.55rem;font-weight:800;margin-bottom:4px;">
                 <i class="fa-solid fa-file-invoice-dollar" style="color:var(--primary);margin-right:8px;"></i>Detalles del Turno #<?= $turno['id'] ?>
@@ -103,25 +57,31 @@ require_once '../../includes/header.php';
         </div>
     </div>
 
+    <?php if ($cierre === null): ?>
+        <p class="card mb-16">Cierre anterior al registro por turno. Se conservan los importes guardados; no hay desglose verificable de pedidos, gastos o usuarios.</p>
+    <?php else: ?>
+        <p class="card mb-16">Resumen guardado al cerrar. Reversos de este turno: S/ <?= number_format($cierre['total_reversos'] ?? 0, 2) ?>.</p>
+    <?php endif; ?>
+
     <!-- Panel de Resumen -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;margin-bottom:20px;">
         <!-- Ingresos -->
         <div class="card" style="border-left:4px solid var(--success);padding:16px;">
             <div style="color:var(--success);margin-bottom:8px;"><i class="fa-solid fa-sack-dollar"></i></div>
             <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);margin-bottom:4px;">S/ <?= number_format($turno['total_general'], 2) ?></div>
-            <div style="font-size:.85rem;color:var(--text-secondary);">Ingresos Totales (<?= $numPedidos ?> pedidos)</div>
+            <div style="font-size:.85rem;color:var(--text-secondary);">Cobros netos<?= $numPedidos === null ? '' : ' (' . (int)$numPedidos . ' pedidos)' ?></div>
         </div>
         <!-- Gastos -->
         <div class="card" style="border-left:4px solid var(--danger);padding:16px;">
             <div style="color:var(--danger);margin-bottom:8px;"><i class="fa-solid fa-money-bill-transfer"></i></div>
-            <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);margin-bottom:4px;">S/ <?= number_format($gastosTotal, 2) ?></div>
+            <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);margin-bottom:4px;"><?= $gastosTotal === null ? 'No disponible' : 'S/ ' . number_format($gastosTotal, 2) ?></div>
             <div style="font-size:.85rem;color:var(--text-secondary);">Gastos del Turno</div>
         </div>
         <!-- Utilidad -->
         <div class="card" style="border-left:4px solid var(--primary);padding:16px;background:var(--bg-secondary);">
             <div style="color:var(--primary);margin-bottom:8px;"><i class="fa-solid fa-piggy-bank"></i></div>
-            <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);margin-bottom:4px;">S/ <?= number_format($turno['total_general'] - $gastosTotal, 2) ?></div>
-            <div style="font-size:.85rem;color:var(--text-secondary);">Utilidad del Turno</div>
+            <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);margin-bottom:4px;"><?= $gastosTotal === null ? 'No disponible' : 'S/ ' . number_format((centimos_reporte($turno['total_general']) - centimos_reporte($gastosTotal)) / 100, 2) ?></div>
+            <div style="font-size:.85rem;color:var(--text-secondary);">Saldo después de gastos</div>
         </div>
     </div>
 
@@ -157,7 +117,7 @@ require_once '../../includes/header.php';
             <table>
                 <thead>
                     <tr>
-                        <th>Cajero / Mesero</th>
+                        <th>Responsable del movimiento</th>
                         <th class="text-right">Efectivo</th>
                         <th class="text-right">Yape/Plin</th>
                         <th class="text-right">Transferencia</th>
@@ -170,8 +130,8 @@ require_once '../../includes/header.php';
                 </thead>
                 <tbody>
                     <?php foreach ($desgloseUsuarios as $du): 
-                        $gastoU = floatval($du['total_gastos']);
-                        $utilidadU = floatval($du['total_general']) - $gastoU;
+                        $gastoU = $du['total_gastos'];
+                        $utilidadU = (centimos_reporte($du['total_general']) - centimos_reporte($gastoU)) / 100;
                     ?>
                     <tr>
                         <td><strong><?= htmlspecialchars($du['usuario']) ?></strong></td>
@@ -191,7 +151,7 @@ require_once '../../includes/header.php';
         <?php else: ?>
         <div class="empty-state">
             <div class="icon"><i class="fa-solid fa-users-slash"></i></div>
-            <p>No se registraron ventas en este turno.</p>
+            <p><?= $cierre === null ? 'Desglose no disponible.' : 'No se registraron movimientos en este turno.' ?></p>
         </div>
         <?php endif; ?>
     </div>

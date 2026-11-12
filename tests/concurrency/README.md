@@ -1,0 +1,30 @@
+# Casos de concurrencia Ola 1
+
+Usar dos perfiles independientes dentro de la VM, una cuenta autorizada por perfil y Apache con capacidad para atender ambos. Preparar un pedido nuevo por repetición y verificar identidad con los scripts del paquete. Usar ambos órdenes y registrar si la contención fue observada. Una ejecución secuencial solo sirve como control.
+
+Para controlar el inicio, abrir una conexión operadora A sobre la base de ensayo y verificar `DATABASE()`, `CONNECTION_ID()` y la identidad de instancia. Iniciar transacción en A y mantener un `SELECT ... FOR UPDATE` breve sobre el ID sintético de mesa o pedido que use el caso. Enviar una solicitud desde cada perfil de navegador con IDs confirmados, comenzando por el flujo que debe tomar primero el bloqueo de restaurante. En una conexión observadora distinta, ejecutar [observar_bloqueos.sql](observar_bloqueos.sql). Correlacionar hilos y tiempos, liberar A con `ROLLBACK` antes del timeout y recoger ambas respuestas. Las pruebas de orden requieren evidencia de espera. La sesión A solo retiene la fila elegida y no cambia los registros.
+
+| ID | Preparación y operación paralela | Resultado esperado |
+|---|---|---|
+| C-007A | Pedido activo con turno abierto. Agregar dos ítems distintos desde dos sesiones. En pedidos nuevos, agregar contra cancelar y contra cobrar. | Cada alta aceptada se registra una sola vez y el total concilia. Si cobrar/cancelar gana, no se agrega después. |
+| C-007B | Cobrar el mismo pedido desde dos sesiones. En una repetición distinta, enfrentar el cobro al cierre del turno. | Un solo cobro y comprobante. El cierre incluye el cobro si este ganó, o el cobro se rechaza si cerró primero. |
+| C-007C | Reintentar una comanda desde el cliente QA con la misma operación y cuerpo en dos sesiones del mismo usuario. Repetir la clave con otro cuerpo dentro del caso. | Una sola comanda y un conjunto de ítems. Mismo resultado en reintento idéntico y rechazo del cuerpo diferente. Comparar fila de `envios_comanda` e ítems. |
+| C-007D | Mesa libre con turno abierto. Admin borra mientras atención crea pedido en esa mesa. Usar una mesa nueva al invertir el orden. | Alta primero: se conserva mesa y pedido activo, borrado rechazado. Borrado primero: no queda un pedido nuevo para esa mesa. La segunda operación espera en el restaurante y no retiene la mesa. |
+| C-001 | Dos operadores abren caja simultáneamente en el mismo restaurante. Repetir con A y B. | En el mismo restaurante queda un solo turno abierto. En restaurantes distintos ambos pueden abrir. |
+| C-021 | Dos administradores intentan reabrir el mismo pedido cobrado con turno posterior abierto y mesa libre. | Un único cambio de estado y un reverso por pago original. No se modifica el cierre inicial. |
+
+En C-007C usar una barrera sobre pedido o restaurante y mantener las sesiones distintas aunque compartan usuario. Para C-001, donde aún no existe el turno, usar el bloqueo de la fila del restaurante como barrera y registrar el orden efectivo sin presumir cuál gana. Guardar hora inicial y final, estado HTTP, SQLSTATE/código si aparece, IDs y número de ítems, pagos, comprobantes, reversos y turnos después de liberar la barrera. Si no se observó solapamiento, repetir antes de decidir el caso. Verificar el resultado en otra conexión con transacciones previas cerradas. [Comportamiento de FOR UPDATE](https://mariadb.com/docs/server/reference/sql-statements/data-manipulation/selecting-data/for-update).
+
+## Protocolo de barrera por caso
+
+La conexión **A** es la barrera operadora, **B** y **C** son dos sesiones HTTP con cookies y usuarios independientes, y **D** observa desde otra conexión MariaDB. Registrar `CONNECTION_ID()` de A y D. Para B y C, registrar los hilos que la vista `INNODB_TRX` asocia a sus transacciones mientras esperan; si el motor no expone ambos, anotar que no se obtuvo evidencia completa. La barrera se inicia con `START TRANSACTION; SELECT id FROM restaurant_ola1_test.<tabla> WHERE id = <id sintético> FOR UPDATE;`. Registrar hora y ID de A, enviar B, confirmar su espera desde D, enviar C y confirmar su espera. Liberar A con `ROLLBACK` antes de `innodb_lock_wait_timeout`. Guardar las horas de inicio y fin de B/C, las dos respuestas y el estado final desde D. Repetir invirtiendo B y C. Usar `observar_bloqueos.sql` mientras ambas solicitudes están en curso. Capturar SQLSTATE 1213/1205 y `SHOW ENGINE INNODB STATUS` en caso de interbloqueo. Una captura sin filas o dos solicitudes terminadas antes de la observación dejan el caso **NO EJECUTADO** para la concurrencia.
+
+| Caso | Datos y barrera exacta | B y C en orden inicial | Estado final |
+|---|---|---|---|
+| C-007D | Mesa libre M y turno T abiertos. A bloquea `mesas.id=M`. | B crea pedido en M; C borra M como administrador. | Solo uno gana; mesa y pedido mantienen integridad. Invertir B/C con una nueva M. |
+| C-007A | Pedido activo P en M. A bloquea `pedidos.id=P`. | B agrega ítem X; C agrega ítem Y. Repetir con C cobrando y luego cancelando pedidos nuevos. | Ítems aceptados una vez, total y estado conciliados. |
+| C-007B | Pedido activo P. A bloquea `pedidos.id=P`. | B cobra P; C cobra P. | Un cobro confirmado y un comprobante. |
+| C-007C | Pedido activo P y mismo usuario en sesiones distintas. A bloquea `pedidos.id=P`. | B y C envían el mismo `operacion_id` y cuerpo. Repetir con cuerpo distinto. | Una fila de idempotencia y sin ítems duplicados. |
+| C-007E | Turno T y pedido activo P. A bloquea `restaurantes.id=R` para el restaurante R de ambos. | B cobra P; C cierra T. | El cobro entra en el cierre o se rechaza sin escritura parcial. |
+
+La fila de restaurante es el primer bloqueo común de los flujos de producción. Si A bloquea una fila secundaria, observar también qué sesión adquiere primero el restaurante y cuál espera. El observador debe registrar el orden efectivo; no inferirlo por la hora de pulsar los botones. Registrar cada ejecución con ID de caso, restaurante, mesa, pedido, turno, usuarios, conexión A/D, hilos B/C observados, tiempos, espera, respuestas y conteos finales. Las pruebas quedan preparadas y sin ejecutar.

@@ -1,92 +1,70 @@
 <?php
 /**
- * auth/login.php — Procesador del formulario de login
- * Sistema SaaS Restaurante | R.DEV
+ * Procesa el acceso con los límites de cuenta e IP.
  */
-session_start();
-require_once '../config/db.php';
+require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/limite_login.php';
 
-// Solo acepta POST
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     header('Location: ' . BASE_URL . '/index.php');
     exit;
 }
 
-$email    = trim($_POST['email']    ?? '');
-$password = trim($_POST['password'] ?? '');
-
-if (empty($email) || empty($password)) {
-    $_SESSION['login_error'] = 'Por favor completa todos los campos.';
-    header('Location: ' . BASE_URL . '/index.php');
+$rechazar_login = static function (int $espera = 0): never {
+    $_SESSION['login_error'] = 'No se pudo iniciar sesión. Revisa tus credenciales o inténtalo en unos minutos.';
+    if ($espera > 0) header('Retry-After: ' . $espera);
+    header('Location: ' . BASE_URL . '/index.php', true, 303);
     exit;
+};
+
+$email = $_POST['email'] ?? '';
+$contrasena = $_POST['password'] ?? '';
+if (!is_string($email) || !is_string($contrasena) || !mb_check_encoding($email, 'UTF-8')
+    || strlen($email) > 400 || strlen($contrasena) > 1024) {
+    $rechazar_login();
 }
+$email = normalizar_identificador_login($email);
+if ($email === '' || $contrasena === '' || mb_strlen($email, 'UTF-8') > 100) $rechazar_login();
+
+$ip = $_SERVER['REMOTE_ADDR'] ?? '';
+if (!filter_var($ip, FILTER_VALIDATE_IP)) $ip = 'unknown';
 
 try {
-    $db   = getDB();
-    $stmt = $db->prepare(
-        "SELECT id, restaurante_id, nombre, email, password, rol, activo,
-                COALESCE(session_version, 1) AS session_version
-         FROM usuarios
-         WHERE email = :email
-         LIMIT 1"
-    );
-    $stmt->execute([':email' => $email]);
-    $usuario = $stmt->fetch();
+    $db = getDB();
+    $resultado = autenticar_login($db, $email, $contrasena, $ip);
+    $usuario = $resultado['usuario'];
+    if (!$usuario) $rechazar_login($resultado['espera']);
 
-    if (!$usuario || !password_verify($password, $usuario['password'])) {
-        $_SESSION['login_error'] = 'Credenciales incorrectas. Intenta de nuevo.';
-        header('Location: ' . BASE_URL . '/index.php');
-        exit;
+    if (!session_regenerate_id(true)) {
+        destruir_sesion();
+        iniciar_sesion();
+        $rechazar_login();
     }
-
-    if (!$usuario['activo']) {
-        $_SESSION['login_error'] = 'Tu cuenta está desactivada. Contacta al administrador.';
-        header('Location: ' . BASE_URL . '/index.php');
-        exit;
-    }
-
-    // — H-020: Verificar que el restaurante del usuario siga activo —
-    if (!empty($usuario['restaurante_id'])) {
-        $stRest = $db->prepare("SELECT activo FROM restaurantes WHERE id = ? LIMIT 1");
-        $stRest->execute([$usuario['restaurante_id']]);
-        $rest = $stRest->fetch();
-        if (!$rest || !$rest['activo']) {
-            $_SESSION['login_error'] = 'El restaurante está desactivado. Contacta al superadministrador.';
-            header('Location: ' . BASE_URL . '/index.php');
-            exit;
-        }
-    }
-
-    // Registrar acceso en logs
-    $log = $db->prepare("INSERT INTO logs_acceso (usuario_id, accion, ip) VALUES (?, 'login', ?)");
-    $log->execute([$usuario['id'], $_SERVER['REMOTE_ADDR'] ?? 'unknown']);
-
-    // Iniciar sesión
-    session_regenerate_id(true);
-    $_SESSION['usuario_id']        = $usuario['id'];
-    $_SESSION['restaurante_id']    = $usuario['restaurante_id'];
-    $_SESSION['nombre']            = $usuario['nombre'];
-    $_SESSION['email']             = $usuario['email'];
-    $_SESSION['rol']               = $usuario['rol'];
-    // — H-020: guardar session_version para detectar cambios de contraseña/rol —
-    $_SESSION['session_version']   = (int)$usuario['session_version'];
-    $_SESSION['_last_revalidated'] = time();
-
+    $ahora = time();
+    $_SESSION = [
+        'usuario_id' => (int)$usuario['id'],
+        'restaurante_id' => $usuario['rol'] === 'superadmin' ? null : (int)$usuario['restaurante_id'],
+        'nombre' => $usuario['nombre'],
+        'email' => $usuario['email'],
+        'rol' => $usuario['rol'],
+        'session_version' => (int)$usuario['session_version'],
+        '_last_revalidated' => $ahora,
+        '_inicio_sesion' => $ahora,
+        '_actividad_sesion' => $ahora,
+    ];
+    getCsrfToken();
     registrarAuditoria($db, 'Inició sesión');
 
-    // Redirigir según rol
     $destinos = [
-        'superadmin' => BASE_URL . '/roles/superadmin/dashboard.php',
-        'admin'      => BASE_URL . '/roles/admin/dashboard.php',
-        'encargado'  => BASE_URL . '/roles/admin/dashboard.php',
-        'atencion'   => BASE_URL . '/roles/atencion/dashboard.php',
-        'cocina'     => BASE_URL . '/roles/cocina/dashboard.php',
+        'superadmin' => '/roles/superadmin/dashboard.php',
+        'admin' => '/roles/admin/dashboard.php',
+        'encargado' => '/roles/admin/dashboard.php',
+        'atencion' => '/roles/atencion/dashboard.php',
+        'cocina' => '/roles/cocina/dashboard.php',
     ];
-    header('Location: ' . ($destinos[$usuario['rol']] ?? BASE_URL . '/index.php'));
+    header('Location: ' . BASE_URL . ($destinos[$usuario['rol']] ?? '/index.php'), true, 303);
     exit;
-
-} catch (PDOException $e) {
-    $_SESSION['login_error'] = 'Error del servidor. Intenta más tarde.';
-    header('Location: ' . BASE_URL . '/index.php');
-    exit;
+} catch (Throwable $e) {
+    error_log('No se pudo completar la autenticación.');
+    $rechazar_login();
 }

@@ -3,8 +3,7 @@
  * index.php — Página de login principal
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
-require_once 'config/db.php';
+require_once __DIR__ . '/config/db.php';
 
 // Si ya está logueado, redirigir a su panel
 if (isset($_SESSION['usuario_id'])) {

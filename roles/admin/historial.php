@@ -3,39 +3,21 @@
  * roles/admin/historial.php — Historial de pedidos cobrados
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
 $db = getDB();
 
-$fecha  = $_GET['fecha']   ?? date('Y-m-d');
-$buscar = trim($_GET['q']  ?? '');
-$tipo   = $_GET['tipo']    ?? '';
+require_once __DIR__ . '/../../includes/reportes_financieros.php';
 
-$sql = "
-    SELECT pe.id, pe.tipo, pe.total, pe.created_at, pe.updated_at,
-           m.numero AS mesa_numero,
-           u.nombre AS cajero,
-           c.id AS comprobante_id,
-           c.numero_comprobante,
-           c.tipo AS comprobante_tipo
-    FROM pedidos pe
-    LEFT JOIN mesas m ON m.id = pe.mesa_id
-    JOIN usuarios u ON u.id = pe.usuario_id
-    LEFT JOIN comprobantes c ON c.pedido_id = pe.id
-    WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado'
-      AND DATE(pe.created_at) = ?
-";
-$params = [$restauranteId, $fecha];
-if ($tipo) { $sql .= " AND pe.tipo = ?"; $params[] = $tipo; }
-if ($buscar && is_numeric($buscar)) { $sql .= " AND pe.id = ?"; $params[] = (int)$buscar; }
-$sql .= " ORDER BY pe.updated_at DESC LIMIT 100";
-
-$st = $db->prepare($sql);
-$st->execute($params);
-$pedidos = $st->fetchAll();
+$fecha = fecha_reporte($_GET['fecha'] ?? null, date('Y-m-d'));
+$buscar = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
+$tipo = in_array($_GET['tipo'] ?? '', ['aqui', 'llevar'], true) ? $_GET['tipo'] : '';
+$pedidos = cobros_periodo(
+    $db, (int)$restauranteId, $fecha, limite_exclusivo_reporte($fecha), $tipo,
+    ctype_digit($buscar) ? (int)$buscar : 0
+);
 
 $pageTitle  = 'Historial';
 $activeMenu = 'historial';
@@ -90,7 +72,7 @@ require_once '../../includes/header.php';
                                 <th>#</th>
                                 <th>Tipo</th>
                                 <th>Mesa</th>
-                                <th>Atendido por</th>
+                                <th>Cobrado por</th>
                                 <th>Cobrado</th>
                                 <th>Total</th>
                                 <th>Comprobante</th>
@@ -109,7 +91,7 @@ require_once '../../includes/header.php';
                                 </td>
                                 <td><?= $p['mesa_numero'] ? 'Mesa '.$p['mesa_numero'] : '—' ?></td>
                                 <td style="font-size:.875rem;color:var(--text-secondary);"><?= htmlspecialchars($p['cajero']) ?></td>
-                                <td style="font-size:.8rem;color:var(--text-secondary);"><?= date('H:i', strtotime($p['updated_at'])) ?></td>
+                                <td style="font-size:.8rem;color:var(--text-secondary);"><?= date('H:i', strtotime($p['cobrado_en'])) ?></td>
                                 <td><strong style="color:var(--success);">S/ <?= number_format($p['total'], 2) ?></strong></td>
                                 <td>
                                     <?php if ($p['comprobante_id']): ?>
@@ -120,19 +102,19 @@ require_once '../../includes/header.php';
                                 </td>
                                 <td>
                                     <div style="display:flex; gap:6px;">
-                                        <button class="btn btn-ghost btn-sm" onclick="verDetallePedido(<?= $p['id'] ?>)" title="Ver detalle">
+                                        <button class="btn btn-ghost btn-sm" style="min-width:44px;min-height:44px;" onclick="verDetallePedido(<?= $p['id'] ?>)" title="Ver detalle">
                                             <i class="fa-solid fa-eye"></i>
                                         </button>
                                         <?php if ($p['comprobante_id']): ?>
-                                        <a href="ver_comprobante.php?id=<?= $p['comprobante_id'] ?>" class="btn btn-ghost btn-sm" title="Ver / Imprimir Comprobante">
+                                        <a href="ver_comprobante.php?id=<?= $p['comprobante_id'] ?>" class="btn btn-ghost btn-sm" style="min-width:44px;min-height:44px;" title="Ver / Imprimir Comprobante">
                                             <i class="fa-solid fa-print"></i>
                                         </a>
                                         <?php endif; ?>
                                         <?php if ($_SESSION['rol'] !== 'encargado'): ?>
-                                        <button class="btn btn-ghost btn-sm" style="color:var(--primary);" onclick="reabrirPedido(<?= $p['id'] ?>)" title="Modificar Pedido">
+                                        <button class="btn btn-ghost btn-sm" style="min-width:44px;min-height:44px;" style="color:var(--primary);" onclick="reabrirPedido(<?= $p['id'] ?>)" title="Modificar Pedido">
                                             <i class="fa-solid fa-pen"></i>
                                         </button>
-                                        <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="eliminarPedido(<?= $p['id'] ?>)" title="Eliminar Venta">
+                                        <button class="btn btn-ghost btn-sm" style="min-width:44px;min-height:44px;" style="color:var(--danger);" onclick="eliminarPedido(<?= $p['id'] ?>)" title="Eliminar Venta">
                                             <i class="fa-solid fa-trash"></i>
                                         </button>
                                         <?php endif; ?>
@@ -161,7 +143,7 @@ require_once '../../includes/header.php';
             <div class="modal-title" id="modal-hist-titulo">
                 <i class="fa-solid fa-receipt"></i> Detalle del Pedido
             </div>
-            <button class="modal-close" onclick="Modal.cerrar('modal-detalle-hist')"><i class="fa-solid fa-xmark"></i></button>
+            <button class="modal-close" style="min-width:44px;min-height:44px;" onclick="Modal.cerrar('modal-detalle-hist')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body" id="modal-hist-body" style="overflow-y:auto;">
             <div class="text-center"><div class="spinner"></div></div>
@@ -170,6 +152,12 @@ require_once '../../includes/header.php';
 </div>
 
 <script>
+function textoHistorial(valor) {
+    const nodo = document.createElement('span');
+    nodo.textContent = valor ?? '';
+    return nodo.innerHTML;
+}
+
 async function verDetallePedido(id) {
     Modal.abrir('modal-detalle-hist');
     document.getElementById('modal-hist-titulo').innerHTML = '<i class="fa-solid fa-receipt"></i> Pedido #' + id;
@@ -196,7 +184,7 @@ async function verDetallePedido(id) {
                 <i class="fa-solid ${p.tipo==='aqui'?'fa-house':'fa-bag-shopping'}"></i>
                 ${p.tipo==='aqui'?'Comer aquí':'Para llevar'}
             </span>
-            ${p.mesa_numero ? `<span class="badge badge-gris"><i class="fa-solid fa-chair"></i> Mesa ${p.mesa_numero}</span>` : ''}
+            ${p.mesa_numero ? `<span class="badge badge-gris"><i class="fa-solid fa-chair"></i> Mesa ${textoHistorial(p.mesa_numero)}</span>` : ''}
         </div>`;
 
         // Items
@@ -204,16 +192,16 @@ async function verDetallePedido(id) {
         p.items.forEach(item => {
             html += `<div class="pedido-item">
                 <div style="flex:1;">
-                    <div class="pedido-item-nombre">${item.cantidad}x ${item.nombre}</div>
-                    ${item.opciones ? `<div class="pedido-item-opciones">· ${item.opciones}</div>` : ''}
-                    ${item.notas   ? `<div class="pedido-item-opciones"><i class="fa-solid fa-note-sticky"></i> ${item.notas}</div>` : ''}
+                    <div class="pedido-item-nombre">${item.cantidad}x ${textoHistorial(item.nombre)}</div>
+                    ${item.opciones ? `<div class="pedido-item-opciones">· ${textoHistorial(item.opciones)}</div>` : ''}
+                    ${item.notas   ? `<div class="pedido-item-opciones"><i class="fa-solid fa-note-sticky"></i> ${textoHistorial(item.notas)}</div>` : ''}
                 </div>
                 <div class="pedido-item-precio">S/ ${parseFloat(item.subtotal).toFixed(2)}</div>
             </div>`;
         });
 
         // Subtotal de ítems
-        const subtotalItems = p.items.reduce((acc, i) => acc + parseFloat(i.subtotal), 0);
+        const subtotalItems = p.items.reduce((acc, i) => acc + Math.round(Number(i.subtotal) * 100), 0) / 100;
         const descuento   = parseFloat(p.descuento   || 0);
         const cargoExtra  = parseFloat(p.cargo_extra || 0);
 
@@ -248,8 +236,9 @@ async function verDetallePedido(id) {
                 html += `<div style="display:flex;justify-content:space-between;align-items:center;font-size:.875rem;margin-bottom:6px;">
                     <span style="color:var(--text-primary);">
                         <i class="fa-solid fa-circle-check" style="color:var(--success);margin-right:5px;"></i>
-                        ${metodoLabel[pg.metodo] || pg.metodo}
-                        ${pg.referencia ? `<span style="color:var(--text-muted);font-size:.75rem;"> · ${pg.referencia}</span>` : ''}
+                        ${textoHistorial(metodoLabel[pg.metodo] || pg.metodo)}
+                        ${pg.cobrador ? textoHistorial(" · " + pg.cobrador) : ""}
+                        ${pg.referencia ? `<span style="color:var(--text-muted);font-size:.75rem;"> · ${textoHistorial(pg.referencia)}</span>` : ''}
                     </span>
                     <strong style="color:var(--success);">S/ ${parseFloat(pg.monto).toFixed(2)}</strong>
                 </div>`;
@@ -264,7 +253,7 @@ async function verDetallePedido(id) {
 }
 
 function reabrirPedido(id) {
-    if(!confirm('¿Estás seguro de reabrir este pedido para modificarlo? Se eliminarán los pagos registrados (y si tiene comprobante, se anulará) y volverá a la pantalla de Atención.')) return;
+    if(!confirm('¿Estás seguro de reabrir este pedido para modificarlo? Se anularán los pagos y el comprobante vigente. El reverso se registrará en el turno abierto; el cierre original no cambiará.')) return;
     
     fetch(BASE_URL + '/api/reabrir_venta.php', {
         method: 'POST',
@@ -273,7 +262,7 @@ function reabrirPedido(id) {
     }).then(r => r.json()).then(res => {
         if(res.success) {
             Toast.exito('Pedido reabierto.');
-            setTimeout(() => location.href = BASE_URL + '/roles/atencion/index.php', 1500);
+            setTimeout(() => location.href = BASE_URL + '/roles/atencion/comanda.php?pedido_id=' + encodeURIComponent(id), 1500);
         } else {
             Toast.error(res.message);
         }
@@ -281,7 +270,7 @@ function reabrirPedido(id) {
 }
 
 function eliminarPedido(id) {
-    if(!confirm('¿Estás seguro de eliminar esta venta? Se anulará el comprobante y se restará del total del día.')) return;
+    if(!confirm('¿Anular esta venta? El comprobante se anulará y se registrará el reverso en el turno abierto, sin modificar cierres anteriores.')) return;
     
     fetch(BASE_URL + '/api/eliminar_venta.php', {
         method: 'POST',

@@ -1,119 +1,60 @@
 <?php
 /**
- * api/cerrar_turno.php
- * Cierra el turno de caja activo y abre automáticamente el siguiente.
- * La caja siempre permanece abierta. Solo disponible para admins.
+ * Cierra el turno presentado y, opcionalmente, abre el siguiente.
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
+require_once '../config/finanzas.php';
+require_once '../includes/reportes_financieros.php';
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    jsonResponse(false, null, 'Método no permitido.');
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido.');
+
+$input = json_decode($GLOBALS['_RAW_INPUT'] ?? file_get_contents('php://input'), true);
+$turno_id = filter_var($input['turno_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+$reabrir = filter_var($input['reabrir'] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+if (!$turno_id || $reabrir === null) {
+    jsonResponse(false, null, 'Turno inválido. Actualiza la vista de caja.');
 }
 
-$data = json_decode($GLOBALS['_RAW_INPUT'] ?? ($GLOBALS['_RAW_INPUT'] = file_get_contents('php://input')), true);
-$reabrir = isset($data['reabrir']) ? filter_var($data['reabrir'], FILTER_VALIDATE_BOOLEAN) : false;
-
-$restauranteId = $_SESSION['restaurante_id'];
-$usuarioId     = $_SESSION['usuario_id'];
+$restaurante_id = (int)$_SESSION['restaurante_id'];
+$usuario_id = (int)$_SESSION['usuario_id'];
 $db = getDB();
 
 try {
     $db->beginTransaction();
-
-    // Buscar turno abierto
-    $stTurno = $db->prepare("
-        SELECT id, inicio FROM turnos 
-        WHERE restaurante_id = ? AND fin IS NULL
-        ORDER BY inicio DESC LIMIT 1
-        FOR UPDATE
-    ");
-    $stTurno->execute([$restauranteId]);
-    $turno = $stTurno->fetch();
-
-    if (!$turno) {
-        $db->rollBack();
-        jsonResponse(false, null, 'No hay una caja abierta en este momento.');
+    bloquear_restaurante($db, $restaurante_id);
+    $turno = exigir_turno_abierto($db, $restaurante_id);
+    if ((int)$turno['id'] !== $turno_id) {
+        throw new DomainException('El turno ya cambió. Actualiza la vista de caja antes de cerrar.');
     }
-
-    // Recalcular totales desde tabla pagos (excluyendo anulados)
-    // Se usa pe.updated_at (momento del cobro) para asignar el pedido al turno
-    // en que realmente fue cobrado, incluso si fue abierto en un turno anterior.
-    $stPagos = $db->prepare("
-        SELECT p.metodo, SUM(p.monto) as total
-        FROM pagos p
-        JOIN pedidos pe ON pe.id = p.pedido_id
-        WHERE pe.restaurante_id = ? 
-          AND pe.estado = 'cobrado'
-          AND pe.updated_at BETWEEN ? AND NOW()
-          AND p.anulado = 0
-        GROUP BY p.metodo
-    ");
-    $stPagos->execute([$restauranteId, $turno['inicio']]);
-    $pagos = $stPagos->fetchAll();
-
-    $totales = [
-        'efectivo' => 0, 'yape' => 0, 'transferencia' => 0, 'tarjeta' => 0, 'otros' => 0, 'general' => 0
-    ];
-    foreach($pagos as $p) {
-        $metodo = $p['metodo'];
-        $monto = floatval($p['total']);
-        if ($metodo === 'efectivo') $totales['efectivo'] += $monto;
-        elseif ($metodo === 'yape') $totales['yape'] += $monto;
-        elseif ($metodo === 'transferencia') $totales['transferencia'] += $monto;
-        elseif ($metodo === 'tarjeta') $totales['tarjeta'] += $monto;
-        else $totales['otros'] += $monto;
-        $totales['general'] += $monto;
+    $totales = resumen_turno($db, $restaurante_id, $turno_id);
+    $metodos = ['efectivo', 'yape', 'transferencia', 'tarjeta', 'otros', 'general'];
+    $valores = array_map(static fn(string $metodo): string => $totales["total_$metodo"], $metodos);
+    foreach ($valores as $valor) {
+        if (strlen(explode('.', ltrim($valor, '-'), 2)[0]) > 8) {
+            throw new DomainException('El turno supera el límite de saldo y requiere conciliación.');
+        }
     }
-
-    // Calcular número de pedidos cobrados en este turno
-    $stPedidos = $db->prepare("
-        SELECT COUNT(id) FROM pedidos
-        WHERE restaurante_id = ? AND estado = 'cobrado' AND updated_at BETWEEN ? AND NOW()
-    ");
-    $stPedidos->execute([$restauranteId, $turno['inicio']]);
-    $numPedidos = $stPedidos->fetchColumn();
-    $totales['num_pedidos'] = $numPedidos;
-
-    // Cerrar turno con totales recalculados
-    $stCerrar = $db->prepare("
-        UPDATE turnos SET 
-            fin = NOW(),
-            total_efectivo = ?,
-            total_yape = ?,
-            total_transferencia = ?,
-            total_tarjeta = ?,
-            total_otros = ?,
-            total_general = ?
-        WHERE id = ?
-    ");
-    $stCerrar->execute([
-        $totales['efectivo'],
-        $totales['yape'],
-        $totales['transferencia'],
-        $totales['tarjeta'],
-        $totales['otros'],
-        $totales['general'],
-        $turno['id']
-    ]);
+    $cierre = $totales + ['mesas_por_pedido' => mesas_del_turno($db, $restaurante_id, $turno_id)];
+    $cierre_json = json_encode($cierre, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    $db->prepare('UPDATE turnos SET fin = NOW(), total_efectivo = ?, total_yape = ?, total_transferencia = ?,
+        total_tarjeta = ?, total_otros = ?, total_general = ?, cierre_json = ?
+        WHERE id = ? AND restaurante_id = ? AND fin IS NULL')
+        ->execute([...$valores, $cierre_json, $turno_id, $restaurante_id]);
+    registrarAuditoria($db, 'Cerró turno',
+        "Turno #$turno_id · Ventas netas S/ {$totales['total_general']} · Gastos S/ {$totales['total_gastos']} · Reversos S/ {$totales['total_reversos']}", true);
 
     $mensaje = 'Turno cerrado correctamente.';
     if ($reabrir) {
-        // Auto-abrir siguiente turno inmediatamente
-        $stNuevoTurno = $db->prepare("
-            INSERT INTO turnos (restaurante_id, usuario_id, inicio)
-            VALUES (?, ?, NOW())
-        ");
-        $stNuevoTurno->execute([$restauranteId, $usuarioId]);
+        $db->prepare('INSERT INTO turnos (restaurante_id, usuario_id, inicio) VALUES (?, ?, NOW())')
+            ->execute([$restaurante_id, $usuario_id]);
+        $nuevo_id = $db->lastInsertId();
+        registrarAuditoria($db, 'Abrió turno', "Turno #$nuevo_id · Después del cierre #$turno_id · Saldo inicial S/ 0.00", true);
         $mensaje = 'Turno cerrado y nueva caja abierta inmediatamente.';
     }
 
     $db->commit();
-    jsonResponse(true, $totales, $mensaje);
-
-} catch (PDOException $e) {
-    $db->rollBack();
-    error_log('Error al cerrar la caja: ' . $e->getMessage());
-    jsonResponse(false, null, 'Ocurrió un error interno en el servidor.');
+    jsonResponse(true, array_combine($metodos, $valores) + ['num_pedidos' => $totales['num_pedidos']], $mensaje);
+} catch (Throwable $e) {
+    error_financiero($db, $e, 'Error al cerrar caja');
 }

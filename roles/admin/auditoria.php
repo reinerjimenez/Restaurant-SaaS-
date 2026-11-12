@@ -3,7 +3,6 @@
  * roles/admin/auditoria.php — Registro de acciones relevantes del restaurante
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'superadmin']);
 

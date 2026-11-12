@@ -4,7 +4,6 @@
  * Usado por: cocina (polling) y atención
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['cocina', 'atencion', 'admin', 'encargado', 'superadmin']);
 

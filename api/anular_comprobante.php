@@ -1,35 +1,40 @@
 <?php
 /**
- * api/anular_comprobante.php
- * Marca un comprobante como anulado (no lo elimina).
- * Sistema SaaS Restaurante | R.DEV
+ * Anula el documento sin alterar el cobro ni el cierre de caja.
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['admin', 'superadmin']);
+require_once '../config/finanzas.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
-$input         = json_decode($GLOBALS['_RAW_INPUT'] ?? ($GLOBALS['_RAW_INPUT'] = file_get_contents('php://input')), true);
-$comprobanteId = (int)($input['comprobante_id'] ?? 0);
-$motivo        = trim($input['motivo'] ?? '');
-$restauranteId = $_SESSION['restaurante_id'];
+$input = json_decode($GLOBALS['_RAW_INPUT'] ?? file_get_contents('php://input'), true);
+$comprobante_id = filter_var($input['comprobante_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+$motivo = $input['motivo'] ?? null;
+if (!$comprobante_id || !is_string($motivo) || trim($motivo) === '' || mb_strlen($motivo) > 200) {
+    jsonResponse(false, null, 'Indica el comprobante y un motivo de hasta 200 caracteres.');
+}
 
-if (!$comprobanteId) jsonResponse(false, null, 'ID de comprobante inválido.');
-if (!$motivo)        jsonResponse(false, null, 'El motivo es requerido.');
-
+$restaurante_id = (int)$_SESSION['restaurante_id'];
 $db = getDB();
 
-// Verificar que pertenece al restaurante y no está ya anulado
-$st = $db->prepare("SELECT id, numero_comprobante, anulado FROM comprobantes WHERE id = ? AND restaurante_id = ?");
-$st->execute([$comprobanteId, $restauranteId]);
-$comp = $st->fetch();
-
-if (!$comp)              jsonResponse(false, null, 'Comprobante no encontrado.');
-if ($comp['anulado'])    jsonResponse(false, null, 'El comprobante ya está anulado.');
-
-$stUpd = $db->prepare("UPDATE comprobantes SET anulado = 1, motivo_anulacion = ? WHERE id = ?");
-$stUpd->execute([substr($motivo, 0, 200), $comprobanteId]);
-
-registrarAuditoria($db, 'Anuló comprobante', $comp['numero_comprobante']);
-jsonResponse(true, null, 'Comprobante anulado correctamente.');
+try {
+    $db->beginTransaction();
+    bloquear_restaurante($db, $restaurante_id);
+    $stmt = $db->prepare('SELECT pedido_id, numero_comprobante, total, anulado
+        FROM comprobantes WHERE id = ? AND restaurante_id = ? FOR UPDATE');
+    $stmt->execute([$comprobante_id, $restaurante_id]);
+    $comprobante = $stmt->fetch();
+    if (!$comprobante || $comprobante['anulado']) {
+        throw new DomainException('El comprobante no existe o ya está anulado.');
+    }
+    $motivo = trim($motivo);
+    $db->prepare('UPDATE comprobantes SET anulado = 1, motivo_anulacion = ? WHERE id = ? AND restaurante_id = ?')
+        ->execute([$motivo, $comprobante_id, $restaurante_id]);
+    registrarAuditoria($db, 'Anuló comprobante',
+        "Comprobante #$comprobante_id ({$comprobante['numero_comprobante']}) · Pedido #{$comprobante['pedido_id']} · S/ {$comprobante['total']} · $motivo · Sin reverso de pago", true);
+    $db->commit();
+    jsonResponse(true, null, 'Comprobante anulado correctamente.');
+} catch (Throwable $e) {
+    error_financiero($db, $e, 'Error al anular comprobante');
+}

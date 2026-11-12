@@ -3,7 +3,6 @@
  * roles/admin/mesas.php — Gestión de mesas + mapa interactivo
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 

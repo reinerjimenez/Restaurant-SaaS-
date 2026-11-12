@@ -4,9 +4,9 @@
  * Solo para admin / superadmin
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
+require_once '../config/finanzas.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
@@ -20,16 +20,16 @@ $db = getDB();
 
 try {
     $db->beginTransaction();
+    bloquear_restaurante($db, $restauranteId);
 
-    // Verificar que el ítem pertenece a un pedido activo de este restaurante
+    // Ubicar el pedido; el bloqueo de restaurante serializa las operaciones
+    // de comanda antes de bloquear el pedido y luego modificar el ítem.
     $stItem = $db->prepare("
-        SELECT pi.id, pi.subtotal, pi.pedido_id, pi.nombre_producto, p.mesa_id
+        SELECT pi.id, pi.subtotal, pi.pedido_id, pi.nombre_producto
         FROM pedido_items pi
         JOIN pedidos p ON p.id = pi.pedido_id
         WHERE pi.id = ?
           AND p.restaurante_id = ?
-          AND p.estado = 'activo'
-        FOR UPDATE
     ");
     $stItem->execute([$itemId, $restauranteId]);
     $item = $stItem->fetch();
@@ -38,6 +38,8 @@ try {
         $db->rollBack();
         jsonResponse(false, null, 'Ítem no encontrado o pedido ya no activo');
     }
+    $pedido = bloquear_pedido($db, $restauranteId, (int)$item['pedido_id'], 'activo');
+    $subtotal_anterior = decimal_centimos(subtotal_pedido($db, (int)$pedido['id']));
 
     // Eliminar opciones relacionadas primero (FK)
     $db->prepare("DELETE FROM pedido_item_opciones WHERE item_id = ?")->execute([$itemId]);
@@ -46,19 +48,16 @@ try {
     $db->prepare("DELETE FROM pedido_items WHERE id = ?")->execute([$itemId]);
 
     // Recalcular total del pedido
-    $stTotal = $db->prepare("SELECT COALESCE(SUM(subtotal),0) FROM pedido_items WHERE pedido_id = ?");
-    $stTotal->execute([$item['pedido_id']]);
-    $nuevoTotal = $stTotal->fetchColumn();
+    $nuevoTotal = decimal_centimos(subtotal_pedido($db, (int)$pedido['id']));
 
-    $db->prepare("UPDATE pedidos SET total = ? WHERE id = ?")->execute([$nuevoTotal, $item['pedido_id']]);
+    $db->prepare("UPDATE pedidos SET total = ? WHERE id = ? AND restaurante_id = ?")
+        ->execute([$nuevoTotal, $pedido['id'], $restauranteId]);
 
+    registrarAuditoria($db, 'Eliminó ítem del pedido',
+        "Ítem #$itemId · Pedido #{$pedido['id']} · S/ $subtotal_anterior → S/ $nuevoTotal", true);
     $db->commit();
-    $nombreProducto = $item['nombre_producto'] ?: 'Ítem';
-    registrarAuditoria($db, 'Eliminó ítem del pedido', "$nombreProducto · Pedido #{$item['pedido_id']}");
     jsonResponse(true, ['nuevo_total' => $nuevoTotal], 'Ítem eliminado correctamente');
 
-} catch (PDOException $e) {
-    $db->rollBack();
-    error_log('Error al eliminar: ' . $e->getMessage());
-    jsonResponse(false, null, 'Ocurrió un error interno en el servidor.');
+} catch (Throwable $e) {
+    error_financiero($db, $e, 'Error al eliminar ítem');
 }

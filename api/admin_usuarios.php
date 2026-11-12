@@ -3,8 +3,8 @@
  * api/admin_usuarios.php — CRUD de usuarios del restaurante
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
-require_once '../config/db.php';
+require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/credenciales.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
@@ -22,7 +22,7 @@ switch ($accion) {
         $nombre   = trim($input['nombre']   ?? '');
         $email    = trim($input['email']    ?? '');
         $rol      = trim($input['rol']      ?? '');
-        $password = trim($input['password'] ?? '');
+        $password = $input['password'] ?? '';
         $activo   = !empty($input['activo']) ? 1 : 0;
 
         if ($rolActual === 'superadmin') {
@@ -38,7 +38,7 @@ switch ($accion) {
         }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) jsonResponse(false, null, 'Correo electrónico inválido');
         if (mb_strlen($nombre) > 100) jsonResponse(false, null, 'El nombre es demasiado largo (máx 100 caracteres)');
-        if (strlen($password) < 6) jsonResponse(false, null, 'La contraseña debe tener al menos 6 caracteres');
+        if ($error_password = error_contrasena($password)) jsonResponse(false, null, $error_password);
 
         // Verificar email único
         $stDup = $db->prepare("SELECT id FROM usuarios WHERE email = ?");
@@ -57,7 +57,7 @@ switch ($accion) {
         $nombre   = trim($input['nombre']   ?? '');
         $email    = trim($input['email']    ?? '');
         $rol      = trim($input['rol']      ?? '');
-        $password = trim($input['password'] ?? '');
+        $password = $input['password'] ?? '';
         $activo   = !empty($input['activo']) ? 1 : 0;
 
         if (!$id || empty($nombre) || empty($email)) jsonResponse(false, null, 'Datos incompletos');
@@ -107,8 +107,8 @@ switch ($accion) {
         $stDup->execute([$email, $id]);
         if ($stDup->fetch()) jsonResponse(false, null, 'El correo ya está en uso por otro usuario');
 
-        if (!empty($password)) {
-            if (strlen($password) < 6) jsonResponse(false, null, 'La contraseña debe tener al menos 6 caracteres');
+        if ($password !== '') {
+            if ($error_password = error_contrasena($password)) jsonResponse(false, null, $error_password);
             $hash = password_hash($password, PASSWORD_BCRYPT);
             // Incrementar session_version para invalidar sesiones activas del usuario editado
             $st   = $db->prepare("UPDATE usuarios SET nombre=?, email=?, password=?, rol=?, activo=?, session_version = session_version + 1 WHERE id=? AND restaurante_id=?");

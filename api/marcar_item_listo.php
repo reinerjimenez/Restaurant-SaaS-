@@ -5,7 +5,6 @@
  *      ó  { item_ids: [5,6,7], estado: '...' }
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['cocina', 'admin', 'encargado', 'superadmin', 'atencion']);
 

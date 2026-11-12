@@ -1,51 +1,29 @@
 <?php
 /**
- * api/abrir_turno.php
- * Abre un nuevo turno de caja para el restaurante.
- * Exclusivo para administradores y superadministradores.
+ * Abre un turno de caja para el restaurante.
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
+require_once '../config/finanzas.php';
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    jsonResponse(false, null, 'Método no permitido.');
-}
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido.');
 
-$restauranteId = $_SESSION['restaurante_id'];
-$usuarioId = $_SESSION['usuario_id'];
+$restaurante_id = (int)$_SESSION['restaurante_id'];
+$usuario_id = (int)$_SESSION['usuario_id'];
 $db = getDB();
 
 try {
     $db->beginTransaction();
-
-    // Verificar si ya hay un turno abierto — FOR UPDATE garantiza atomicidad
-    // ante dos peticiones simultáneas (la segunda bloqueará hasta que la primera
-    // haga commit, y entonces verá el turno ya existente y abortará).
-    $stVerificar = $db->prepare("
-        SELECT id FROM turnos
-        WHERE restaurante_id = ? AND fin IS NULL
-        FOR UPDATE
-    ");
-    $stVerificar->execute([$restauranteId]);
-
-    if ($stVerificar->fetch()) {
-        $db->rollBack();
-        jsonResponse(false, null, 'Ya existe una caja abierta en este momento.');
+    bloquear_restaurante($db, $restaurante_id);
+    if (turno_abierto($db, $restaurante_id)) {
+        throw new DomainException('Ya existe una caja abierta en este momento.');
     }
-
-    // Insertar nuevo turno
-    $stInsert = $db->prepare("
-        INSERT INTO turnos (restaurante_id, usuario_id, inicio)
-        VALUES (?, ?, NOW())
-    ");
-    $stInsert->execute([$restauranteId, $usuarioId]);
-
+    $db->prepare('INSERT INTO turnos (restaurante_id, usuario_id, inicio) VALUES (?, ?, NOW())')
+        ->execute([$restaurante_id, $usuario_id]);
+    $turno_id = $db->lastInsertId();
+    registrarAuditoria($db, 'Abrió turno', "Turno #$turno_id · Saldo inicial S/ 0.00", true);
     $db->commit();
     jsonResponse(true, null, 'Caja abierta correctamente.');
-
-} catch (PDOException $e) {
-    $db->rollBack();
-    error_log('Error al abrir la caja: ' . $e->getMessage());
-    jsonResponse(false, null, 'Ocurrió un error interno en el servidor.');
+} catch (Throwable $e) {
+    error_financiero($db, $e, 'Error al abrir caja');
 }

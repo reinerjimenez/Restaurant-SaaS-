@@ -1,21 +1,28 @@
 <?php
 /**
- * auth/logout.php — Cierre de sesión
- * Sistema SaaS Restaurante | R.DEV
+ * Cierra la sesión por POST protegido y expira su cookie.
  */
-session_start();
-require_once '../config/db.php';
+require_once __DIR__ . '/../config/db.php';
 
-// Registrar logout en logs
-if (isset($_SESSION['usuario_id'])) {
-    try {
-        $db  = getDB();
-        $log = $db->prepare("INSERT INTO logs_acceso (usuario_id, accion, ip) VALUES (?, 'logout', ?)");
-        $log->execute([$_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'] ?? 'unknown']);
-    } catch (Exception $e) { /* silenciar */ }
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+    http_response_code(405);
+    header('Allow: POST');
+    exit('Usa el botón Salir para cerrar sesión.');
 }
 
-session_unset();
-session_destroy();
-header('Location: ' . BASE_URL . '/index.php');
+$usuario_id = $_SESSION['usuario_id'] ?? null;
+destruir_sesion();
+
+if ($usuario_id) {
+    try {
+        $db = getDB(true);
+        if ($db !== null) {
+            $st = $db->prepare("INSERT INTO logs_acceso (usuario_id, accion, ip) VALUES (?, 'logout', ?)");
+            $st->execute([$usuario_id, $_SERVER['REMOTE_ADDR'] ?? null]);
+        }
+    } catch (Throwable $e) {
+        error_log('No se pudo registrar el cierre de sesión.');
+    }
+}
+header('Location: ' . BASE_URL . '/index.php', true, 303);
 exit;

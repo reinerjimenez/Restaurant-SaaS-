@@ -3,7 +3,6 @@
  * api/get_mesas.php — Estado actual de mesas
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin', 'cocina']);
 

@@ -3,7 +3,6 @@
  * roles/cocina/dashboard.php — Vista de cocina en tiempo real
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['cocina', 'admin', 'encargado', 'superadmin']);
 

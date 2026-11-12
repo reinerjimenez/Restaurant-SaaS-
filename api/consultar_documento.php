@@ -5,7 +5,6 @@
  * El token NUNCA llega al frontend.
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 

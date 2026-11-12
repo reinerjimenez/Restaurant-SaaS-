@@ -3,61 +3,48 @@
  * roles/admin/gastos.php — Gestión completa de gastos (Admin)
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 
-$restauranteId = $_SESSION['restaurante_id'];
-$usuarioId     = $_SESSION['usuario_id'];
+require_once __DIR__ . '/../../config/finanzas.php';
+require_once __DIR__ . '/../../includes/reportes_financieros.php';
+require_once __DIR__ . '/../../includes/gastos_financieros.php';
+
+$restauranteId = (int)$_SESSION['restaurante_id'];
+$usuarioId = (int)$_SESSION['usuario_id'];
 $db = getDB();
-
-$fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
-$fechaFin    = $_GET['fecha_fin']    ?? date('Y-m-d');
+$hoy = date('Y-m-d');
 $mensaje = '';
+$tipo_mensaje = 'exito';
 
-// Procesar formulario
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
-    $accion      = $_POST['accion'];
-    $gastoId     = intval($_POST['id'] ?? 0);
-    $categoria   = trim($_POST['categoria'] ?? '');
-    $descripcion = trim($_POST['descripcion'] ?? '');
-    $monto       = floatval($_POST['monto'] ?? 0);
-    $fecha       = $_POST['fecha'] ?? date('Y-m-d');
-
-    if ($_SESSION['rol'] === 'encargado' && in_array($accion, ['editar', 'eliminar'], true)) {
-        $mensaje = "<div class='toast error'><i class='fa-solid fa-circle-xmark'></i> No tienes permiso para editar o eliminar gastos.</div>";
-    } elseif ($accion === 'registrar' && $categoria && $descripcion && $monto > 0 && $fecha) {
-        $st = $db->prepare("INSERT INTO gastos (restaurante_id, usuario_id, categoria, descripcion, monto, fecha) VALUES (?, ?, ?, ?, ?, ?)");
-        if ($st->execute([$restauranteId, $usuarioId, $categoria, $descripcion, $monto, $fecha])) {
-            $mensaje = "<div class='toast exito'><i class='fa-solid fa-circle-check'></i> Gasto registrado.</div>";
-        }
-    } elseif ($accion === 'editar' && $gastoId > 0 && $categoria && $descripcion && $monto > 0 && $fecha) {
-        $st = $db->prepare("UPDATE gastos SET categoria=?, descripcion=?, monto=?, fecha=? WHERE id=? AND restaurante_id=?");
-        if ($st->execute([$categoria, $descripcion, $monto, $fecha, $gastoId, $restauranteId])) {
-            $mensaje = "<div class='toast exito'><i class='fa-solid fa-circle-check'></i> Gasto actualizado.</div>";
-        }
-    } elseif ($accion === 'eliminar' && $gastoId > 0) {
-        $st = $db->prepare("DELETE FROM gastos WHERE id=? AND restaurante_id=?");
-        if ($st->execute([$gastoId, $restauranteId])) {
-            $mensaje = "<div class='toast exito'><i class='fa-solid fa-circle-check'></i> Gasto eliminado.</div>";
-        }
-    } else {
-        $mensaje = "<div class='toast advertencia'><i class='fa-solid fa-triangle-exclamation'></i> Datos inválidos.</div>";
+    try {
+        $mensaje = guardar_gasto($db, $restauranteId, $usuarioId, $_SESSION['rol'], $_POST);
+    } catch (DomainException $error) {
+        $mensaje = $error->getMessage();
+        $tipo_mensaje = 'error';
+    } catch (Throwable $error) {
+        error_log('No se guardó el gasto (' . get_class($error) . ':' . $error->getCode() . ').');
+        $mensaje = 'No se pudo guardar el gasto. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
     }
 }
 
-// Obtener gastos del periodo
+$fechaInicio = fecha_reporte($_GET['fecha_inicio'] ?? null, date('Y-m-01'));
+$fechaFin = fecha_reporte($_GET['fecha_fin'] ?? null, $hoy);
 $stGastos = $db->prepare("
-    SELECT g.*, u.nombre AS usuario_nombre 
+    SELECT g.*, u.nombre AS usuario_nombre,
+           (g.activo = 1 AND t.id IS NOT NULL AND t.fin IS NULL) AS editable
     FROM gastos g
     LEFT JOIN usuarios u ON u.id = g.usuario_id
-    WHERE g.restaurante_id = ? AND g.fecha BETWEEN ? AND ?
+    LEFT JOIN turnos t ON t.id = g.turno_id AND t.restaurante_id = g.restaurante_id
+    WHERE g.restaurante_id = ? AND g.fecha >= ? AND g.fecha < ?
     ORDER BY g.fecha DESC, g.created_at DESC
 ");
-$stGastos->execute([$restauranteId, $fechaInicio, $fechaFin]);
+$stGastos->execute([$restauranteId, $fechaInicio, limite_exclusivo_reporte($fechaFin)]);
 $gastos = $stGastos->fetchAll();
-
-$totalPeriodo = array_sum(array_column($gastos, 'monto'));
+$activos = array_filter($gastos, static fn(array $gasto): bool => (bool)$gasto['activo']);
+$totalPeriodo = array_sum(array_map('centimos_reporte', array_column($activos, 'monto'))) / 100;
 
 $pageTitle  = 'Gestión de Gastos';
 $activeMenu = 'gastos';
@@ -65,12 +52,14 @@ require_once '../../includes/header.php';
 ?>
 
 <div class="page-content">
-    <?= $mensaje ?>
+    <?php if ($mensaje !== ''): ?>
+        <div class="toast <?= $tipo_mensaje ?>" role="status"><?= htmlspecialchars($mensaje, ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
 
     <div class="d-flex align-center justify-between mb-16">
         <div>
             <h1><i class="fa-solid fa-money-bill-wave" style="font-size:1rem;margin-right:6px;color:var(--primary);"></i> Gestión de Gastos</h1>
-            <p>Control de gastos operativos del restaurante</p>
+            <p>Gastos por fecha contable; el turno corresponde al momento de registro.</p>
         </div>
         <button class="btn btn-primario" onclick="abrirModalGasto()">
             <i class="fa-solid fa-plus"></i> Registrar Gasto
@@ -101,12 +90,12 @@ require_once '../../includes/header.php';
         <div class="stat-card rojo">
             <div class="stat-icon"><i class="fa-solid fa-money-bill-transfer"></i></div>
             <div class="stat-valor">S/ <?= number_format($totalPeriodo, 2) ?></div>
-            <div class="stat-label">Total Gastos (Período)</div>
+            <div class="stat-label">Total de gastos activos</div>
         </div>
         <div class="stat-card naranja">
             <div class="stat-icon"><i class="fa-solid fa-receipt"></i></div>
-            <div class="stat-valor"><?= count($gastos) ?></div>
-            <div class="stat-label">Cantidad de Gastos</div>
+            <div class="stat-valor"><?= count($activos) ?></div>
+            <div class="stat-label">Gastos activos</div>
         </div>
     </div>
 
@@ -117,7 +106,8 @@ require_once '../../includes/header.php';
             <table>
                 <thead>
                     <tr>
-                        <th>Fecha</th>
+                        <th>Fecha contable</th>
+                        <th>Turno de registro</th>
                         <th>Categoría</th>
                         <th>Descripción</th>
                         <th>Registrado por</th>
@@ -131,18 +121,26 @@ require_once '../../includes/header.php';
                     <?php foreach ($gastos as $g): ?>
                     <tr>
                         <td><?= date('d/m/Y', strtotime($g['fecha'])) ?></td>
+                        <td><?= $g['turno_id'] ? '#' . (int)$g['turno_id'] : 'Sin asignar' ?></td>
                         <td><span class="badge badge-gris"><?= htmlspecialchars($g['categoria']) ?></span></td>
                         <td><?= htmlspecialchars($g['descripcion']) ?></td>
-                        <td><?= htmlspecialchars($g['usuario_nombre']) ?></td>
-                        <td class="text-right fw-700" style="color: var(--danger);">S/ <?= number_format($g['monto'], 2) ?></td>
+                        <td><?= htmlspecialchars($g['usuario_nombre'] ?? 'Usuario no disponible') ?></td>
+                        <td class="text-right fw-700" style="color: var(--danger);">S/ <?= number_format($g['monto'], 2) ?><?= $g['activo'] ? '' : ' · Anulado' ?></td>
                         <?php if ($_SESSION['rol'] !== 'encargado'): ?>
                         <td class="text-right">
-                            <button class="btn btn-ghost btn-sm" onclick='editarGasto(<?= json_encode($g) ?>)'>
+                            <?php if ($g['editable']): ?>
+                            <button type="button" class="btn btn-ghost btn-sm" style="min-height:44px;min-width:44px;" title="Editar gasto"
+                                    data-gasto="<?= htmlspecialchars(json_encode($g, JSON_INVALID_UTF8_SUBSTITUTE), ENT_QUOTES, 'UTF-8') ?>"
+                                    onclick="editarGasto(JSON.parse(this.dataset.gasto))">
                                 <i class="fa-solid fa-pen"></i>
                             </button>
-                            <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick='eliminarGasto(<?= $g["id"] ?>)'>
-                                <i class="fa-solid fa-trash"></i>
+                            <button type="button" class="btn btn-ghost btn-sm" style="color:var(--danger);min-height:44px;min-width:44px;" title="Anular gasto"
+                                    onclick="eliminarGasto(<?= (int)$g['id'] ?>)">
+                                <i class="fa-solid fa-ban"></i>
                             </button>
+                            <?php else: ?>
+                                <span class="text-muted">—</span>
+                            <?php endif; ?>
                         </td>
                         <?php endif; ?>
                     </tr>
@@ -164,16 +162,17 @@ require_once '../../includes/header.php';
     <div class="modal">
         <div class="modal-header">
             <div class="modal-title" id="modal-titulo"><i class="fa-solid fa-plus"></i> Registrar Gasto</div>
-            <button class="modal-close" onclick="Modal.cerrar('modal-gasto')"><i class="fa-solid fa-xmark"></i></button>
+            <button class="modal-close" style="min-width:44px;min-height:44px;" onclick="Modal.cerrar('modal-gasto')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <form method="POST">
             <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+            <?= campos_contexto_restaurante() ?>
             <input type="hidden" name="accion" id="accion" value="registrar">
             <input type="hidden" name="id" id="gasto_id" value="">
             <div class="modal-body">
                 <div class="form-row-2">
                     <div class="form-group">
-                        <label class="form-label">Fecha</label>
+                        <label class="form-label">Fecha contable</label>
                         <input type="date" name="fecha" id="fecha" class="form-control" value="<?= date('Y-m-d') ?>" required>
                     </div>
                     <div class="form-group">
@@ -196,7 +195,7 @@ require_once '../../includes/header.php';
                 </div>
                 <div class="form-group">
                     <label class="form-label">Monto (S/)</label>
-                    <input type="number" name="monto" id="monto" class="form-control" step="0.01" min="0.10" placeholder="0.00" required>
+                    <input type="number" name="monto" id="monto" class="form-control" step="0.01" min="0.01" max="99999999.99" placeholder="0.00" required>
                 </div>
             </div>
             <div class="modal-footer">
@@ -207,11 +206,13 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<!-- Formulario para eliminar oculto -->
+<!-- Formulario para anular sin borrar el registro -->
 <form method="POST" id="form-eliminar" style="display:none;">
     <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+            <?= campos_contexto_restaurante() ?>
     <input type="hidden" name="accion" value="eliminar">
     <input type="hidden" name="id" id="eliminar_id" value="">
+    <input type="hidden" name="motivo" id="eliminar_motivo" value="">
 </form>
 
 <script>
@@ -240,7 +241,14 @@ function editarGasto(g) {
 }
 
 function eliminarGasto(id) {
-    confirmar('¿Está seguro de eliminar este gasto permanentemente?', () => {
+    confirmar('¿Anular este gasto del turno abierto?', () => {
+        const motivo = window.prompt('Motivo de anulación (sin datos personales):');
+        if (motivo === null) return;
+        if (!motivo.trim() || motivo.trim().length > 200) {
+            Toast.error('Indica un motivo de hasta 200 caracteres.');
+            return;
+        }
+        document.getElementById('eliminar_motivo').value = motivo.trim();
         document.getElementById('eliminar_id').value = id;
         document.getElementById('form-eliminar').submit();
     });

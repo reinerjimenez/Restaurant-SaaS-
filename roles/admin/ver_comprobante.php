@@ -4,7 +4,6 @@
  * Vista detallada de un comprobante desde el panel admin.
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin', 'atencion']);
 $rolActual = $_SESSION['rol'] ?? '';

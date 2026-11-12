@@ -3,40 +3,23 @@
  * roles/superadmin/dashboard.php — Panel global del desarrollador
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['superadmin']);
 
+require_once __DIR__ . '/../../includes/reportes_financieros.php';
+
 $db = getDB();
-
-$stRest = $db->query("SELECT COUNT(*) FROM restaurantes WHERE activo = 1");
-$totalRestaurantes = $stRest->fetchColumn();
-
-$stUsr = $db->query("SELECT COUNT(*) FROM usuarios WHERE activo = 1 AND rol != 'superadmin'");
-$totalUsuarios = $stUsr->fetchColumn();
-
 $hoy = date('Y-m-d');
-$stVentas = $db->prepare("SELECT COALESCE(SUM(total),0) AS total, COUNT(*) AS cant FROM pedidos WHERE estado='cobrado' AND DATE(created_at) = ?");
-$stVentas->execute([$hoy]);
-$ventasHoy = $stVentas->fetch();
+$restaurantes = restaurantes_con_ventas($db, $hoy, limite_exclusivo_reporte($hoy));
+
+// Las tarjetas suman la misma lectura mostrada en la tabla.
+$totales = totales_panel_global($restaurantes);
+$totalRestaurantes = $totales['restaurantes_activos'];
+$totalUsuarios = $totales['usuarios_activos'];
+$ventasHoy = $totales['ventas_centimos'] / 100;
 
 $stActivos = $db->query("SELECT COUNT(*) FROM pedidos WHERE estado = 'activo'");
 $pedidosActivos = $stActivos->fetchColumn();
-
-$stRestList = $db->query("
-    SELECT r.id, r.nombre, r.activo,
-           COUNT(DISTINCT u.id)  AS usuarios,
-           COUNT(DISTINCT m.id)  AS mesas,
-           COUNT(DISTINCT pe.id) AS pedidos_hoy,
-           COALESCE(SUM(pe.total),0) AS ventas_hoy
-    FROM restaurantes r
-    LEFT JOIN usuarios u   ON u.restaurante_id = r.id
-    LEFT JOIN mesas m      ON m.restaurante_id = r.id AND m.activo = 1
-    LEFT JOIN pedidos pe   ON pe.restaurante_id = r.id AND pe.estado = 'cobrado' AND DATE(pe.created_at) = CURDATE()
-    GROUP BY r.id
-    ORDER BY r.id DESC
-");
-$restaurantes = $stRestList->fetchAll();
 
 $stLogs = $db->query("
     SELECT la.accion, la.ip, la.created_at, u.nombre, u.rol
@@ -75,11 +58,11 @@ require_once '../../includes/header.php';
                 <div class="stat-card verde">
                     <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
                     <div class="stat-valor"><?= $totalUsuarios ?></div>
-                    <div class="stat-label">Usuarios totales</div>
+                    <div class="stat-label">Usuarios activos</div>
                 </div>
                 <div class="stat-card naranja">
                     <div class="stat-icon"><i class="fa-solid fa-sack-dollar"></i></div>
-                    <div class="stat-valor">S/ <?= number_format($ventasHoy['total'], 2) ?></div>
+                    <div class="stat-valor">S/ <?= number_format($ventasHoy, 2) ?></div>
                     <div class="stat-label">Ventas globales hoy</div>
                 </div>
                 <div class="stat-card dorado">
@@ -102,6 +85,7 @@ require_once '../../includes/header.php';
                                 <tr>
                                     <th>Nombre</th>
                                     <th>Mesas</th>
+                                    <th>Pedidos hoy</th>
                                     <th>Ventas hoy</th>
                                     <th>Estado</th>
                                 </tr>
@@ -111,9 +95,10 @@ require_once '../../includes/header.php';
                                 <tr>
                                     <td>
                                         <strong><?= htmlspecialchars($r['nombre']) ?></strong><br>
-                                        <span style="font-size:.72rem;color:var(--text-secondary);"><?= $r['usuarios'] ?> usuarios</span>
+                                        <span style="font-size:.72rem;color:var(--text-secondary);"><?= $r['usuarios'] ?> usuarios activos</span>
                                     </td>
                                     <td><?= $r['mesas'] ?></td>
+                                    <td><?= $r['pedidos_hoy'] ?></td>
                                     <td>S/ <?= number_format($r['ventas_hoy'],2) ?></td>
                                     <td><span class="badge <?= $r['activo']?'badge-verde':'badge-gris' ?>"><?= $r['activo']?'Activo':'Inactivo' ?></span></td>
                                 </tr>

@@ -3,8 +3,8 @@
  * roles/superadmin/perfil.php — Editar perfil del Superadmin
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
-require_once '../../config/db.php';
+require_once __DIR__ . '/../../config/db.php';
+require_once __DIR__ . '/../../config/credenciales.php';
 requireRole(['superadmin']);
 
 $db = getDB();
@@ -24,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'El nombre y el correo/usuario son obligatorios.';
     } elseif ($pass !== $pass2) {
         $error = 'Las contraseñas no coinciden.';
-    } elseif (!empty($pass) && strlen($pass) < 6) {
-        $error = 'La contraseña debe tener al menos 6 caracteres.';
+    } elseif ($pass !== '' && ($error_password = error_contrasena($pass))) {
+        $error = $error_password;
     } else {
         // Verificar si el email ya existe para otro usuario
         $stVerificar = $db->prepare("SELECT id FROM usuarios WHERE email = ? AND id != ?");
@@ -33,11 +33,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($stVerificar->fetch()) {
             $error = 'El nombre de usuario o correo electrónico ya está en uso.';
         } else {
-            if (!empty($pass)) {
-                // Actualizar con contraseña
-                $hash = password_hash($pass, PASSWORD_DEFAULT);
-                $st = $db->prepare("UPDATE usuarios SET nombre = ?, email = ?, password = ? WHERE id = ?");
-                $st->execute([$nombre, $email, $hash, $usuarioId]);
+            if ($pass !== '') {
+                // Invalida las otras sesiones sin mantener una versión revocada en esta.
+                $hash = password_hash($pass, PASSWORD_BCRYPT);
+                $version = (int)$_SESSION['session_version'];
+                $st = $db->prepare("UPDATE usuarios
+                                    SET nombre = ?, email = ?, password = ?, session_version = session_version + 1
+                                    WHERE id = ? AND session_version = ?");
+                $st->execute([$nombre, $email, $hash, $usuarioId, $version]);
+                if ($st->rowCount() !== 1 || !session_regenerate_id(true)) {
+                    destruir_sesion();
+                    header('Location: ' . BASE_URL . '/index.php', true, 303);
+                    exit;
+                }
+                $_SESSION['session_version'] = $version + 1;
+                unset($_SESSION['csrf_token']);
+                getCsrfToken();
+                if (isset($_SESSION['_contexto_restaurante'])) {
+                    $_SESSION['_contexto_restaurante'] = bin2hex(random_bytes(32));
+                }
             } else {
                 // Actualizar sin tocar la contraseña
                 $st = $db->prepare("UPDATE usuarios SET nombre = ?, email = ? WHERE id = ?");
@@ -107,7 +121,7 @@ require_once '../../includes/header.php';
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" class="mb-20">
                         <div class="form-group">
                             <label class="form-label">Nueva Contraseña</label>
-                            <input type="password" name="password" class="form-control" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+                            <input type="password" name="password" class="form-control" minlength="12" placeholder="Mínimo 12 caracteres" autocomplete="new-password">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Confirmar Contraseña</label>

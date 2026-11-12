@@ -89,13 +89,16 @@ if ($rol === 'superadmin') {
             <div style="font-size: .71rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px;">Acceso rápido</div>
             <div style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
                 <?php foreach ($sidebarRestaurantes as $r): ?>
-                <a href="<?= BASE_URL ?>/roles/admin/dashboard.php?set_rest_id=<?= $r['id'] ?>"
-                   style="display: flex; align-items: center; gap: 8px; font-size: .8rem; padding: 6px 8px; border-radius: var(--radius-sm); color: var(--text-secondary); transition: .15s;"
-                   onmouseover="this.style.background='var(--bg)'"
-                   onmouseout="this.style.background='transparent'">
-                   <i class="fa-solid fa-store" style="font-size: .75rem; flex-shrink: 0;"></i>
-                   <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><?= htmlspecialchars($r['nombre']) ?></span>
-                </a>
+                <form method="post" action="<?= BASE_URL ?>/auth/seleccionar_restaurante.php">
+                    <input type="hidden" name="csrf_token" value="<?= getCsrfToken() ?>">
+                    <input type="hidden" name="restaurante_id" value="<?= (int)$r['id'] ?>">
+                    <button type="submit" class="btn btn-ghost btn-sm btn-full"
+                        <?= (int)($_SESSION['restaurante_id'] ?? 0) === (int)$r['id'] ? 'aria-current="true"' : '' ?>
+                        style="justify-content:start;min-height:44px;">
+                        <i class="fa-solid fa-store" aria-hidden="true"></i>
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= htmlspecialchars($r['nombre']) ?></span>
+                    </button>
+                </form>
                 <?php endforeach; ?>
             </div>
         </div>
@@ -117,10 +120,13 @@ if ($rol === 'superadmin') {
             </div>
         </div>
         <?php if (!isset($hideLogout) || !$hideLogout): ?>
-        <a href="<?= BASE_URL ?>/auth/logout.php" class="btn btn-ghost btn-sm btn-full" style="min-height: 36px; gap: 8px; justify-content: center; border-color: var(--border); color: var(--danger); background: var(--surface);">
-            <i class="fa-solid fa-right-from-bracket"></i>
-            <span>Salir</span>
-        </a>
+        <form method="post" action="<?= BASE_URL ?>/auth/logout.php">
+            <input type="hidden" name="csrf_token" value="<?= getCsrfToken() ?>">
+            <button type="submit" class="btn btn-ghost btn-sm btn-full" style="min-height:44px;gap:8px;justify-content:center;border-color:var(--border);color:var(--danger);background:var(--surface);">
+                <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                <span>Salir</span>
+            </button>
+        </form>
         <?php endif; ?>
     </div>
 </aside>

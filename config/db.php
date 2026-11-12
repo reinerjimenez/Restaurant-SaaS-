@@ -54,11 +54,12 @@ define('DB_CHARSET', $_ENV['DB_CHARSET'] ?? 'utf8mb4');
 define('APIS_NET_TOKEN', $_ENV['APIS_NET_TOKEN'] ?? '');
 
 date_default_timezone_set('America/Lima');
+require_once __DIR__ . '/session.php';
 
 /**
  * Retorna una instancia singleton de PDO.
  */
-function getDB(): PDO {
+function getDB(bool $tolerar_fallo = false): ?PDO {
     static $pdo = null;
 
     if ($pdo === null) {
@@ -72,10 +73,10 @@ function getDB(): PDO {
         try {
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $opciones);
         } catch (PDOException $e) {
-            // En producción no mostrar detalles del error
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Error de conexión a la base de datos.']);
-            exit;
+            error_log('Falló la conexión a la base de datos.');
+            if ($tolerar_fallo) return null;
+            http_response_code(503);
+            jsonResponse(false, null, 'Error de conexión a la base de datos.');
         }
     }
 
@@ -96,10 +97,16 @@ function jsonResponse(bool $success, $data = null, string $message = ''): void {
 }
 
 /**
- * Registra una acción relevante sin interrumpir el flujo principal si falla.
+ * Los eventos críticos se escriben en la misma transacción que el movimiento.
  */
-function registrarAuditoria(PDO $db, string $accion, string $detalle = ''): void {
-    if (empty($_SESSION['usuario_id']) || empty($_SESSION['restaurante_id'])) return;
+function registrarAuditoria(PDO $db, string $accion, string $detalle = '', bool $obligatoria = false): void {
+    if (empty($_SESSION['usuario_id']) || empty($_SESSION['restaurante_id'])) {
+        if ($obligatoria) throw new LogicException('Falta el actor o restaurante para la auditoría.');
+        return;
+    }
+    if ($obligatoria && !$db->inTransaction()) {
+        throw new LogicException('La auditoría obligatoria requiere una transacción.');
+    }
 
     try {
         $stmt = $db->prepare(
@@ -111,178 +118,161 @@ function registrarAuditoria(PDO $db, string $accion, string $detalle = ''): void
             $_SESSION['usuario_id'],
             $_SESSION['nombre'] ?? 'Desconocido',
             $accion,
-            $detalle ?: null,
+            $detalle !== '' ? $detalle : null,
             $_SERVER['REMOTE_ADDR'] ?? null,
         ]);
     } catch (Throwable $e) {
-        error_log('No se pudo registrar auditoría: ' . $e->getMessage());
+        if ($obligatoria) throw $e;
+        error_log('No se pudo registrar un evento de auditoría.');
     }
 }
 
+function es_peticion_api(): bool {
+    return preg_match('~/api/[^/]+\.php$~D', $_SERVER['SCRIPT_NAME'] ?? '') === 1;
+}
+
+function es_peticion_ajax(): bool {
+    return es_peticion_api() || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])
+        || isset($_SERVER['HTTP_X_CSRF_TOKEN'])
+        || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json');
+}
+
+function campos_contexto_restaurante(): string {
+    if (($_SESSION['rol'] ?? '') !== 'superadmin' || empty($_SESSION['_contexto_restaurante'])) return '';
+    $id = (int)($_SESSION['restaurante_id'] ?? 0);
+    $token = htmlspecialchars($_SESSION['_contexto_restaurante'], ENT_QUOTES, 'UTF-8');
+    return '<input type="hidden" name="restaurante_esperado" value="' . $id . '">'
+        . '<input type="hidden" name="contexto_restaurante" value="' . $token . '">';
+}
+
 /**
- * Verifica sesión activa y rol permitido.
- * Si no cumple, redirige al login o devuelve JSON si es petición AJAX.
- *
- * H-020: Revalida contra la BD cada 60 s que el usuario siga activo,
- * que su rol no haya cambiado, que su session_version coincida y que
- * el restaurante siga activo. Cualquier discrepancia cierra la sesión.
+ * Conserva la revocación de la Ola 0 y comprueba el contexto antes de operar.
  */
-function requireRole(array $rolesPermitidos): void {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
-
-    $esAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) ||
-              (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
-
-    // Función interna: destruye la sesión y redirige / responde JSON
-    $terminarSesion = function(string $motivo) use ($esAjax): never {
-        session_unset();
-        session_destroy();
-        if ($esAjax) {
+function requireRole(array $roles_permitidos): void {
+    $es_ajax = es_peticion_ajax();
+    $terminar_sesion = static function (string $motivo) use ($es_ajax): never {
+        destruir_sesion();
+        if ($es_ajax) {
+            http_response_code(401);
             jsonResponse(false, null, $motivo);
         }
         header('Location: ' . BASE_URL . '/index.php');
         exit;
     };
 
-    // Sin sesión — redirigir al login
-    if (!isset($_SESSION['usuario_id'])) {
-        $terminarSesion('No autorizado');
+    if (!isset($_SESSION['usuario_id']) || sesion_expirada($_SESSION, time())) {
+        $terminar_sesion('Inicia sesión para continuar.');
+    }
+    $rol = $_SESSION['rol'] ?? '';
+    if (!in_array($rol, $roles_permitidos, true)) {
+        if ($es_ajax) {
+            http_response_code(403);
+            jsonResponse(false, null, 'No autorizado');
+        }
+        header('Location: ' . BASE_URL . '/index.php');
+        exit;
     }
 
-    // — H-020: Revalidación periódica contra la BD (caché 60 s) —
+    $metodo = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     $ahora = time();
-    if (empty($_SESSION['_last_revalidated']) || ($ahora - $_SESSION['_last_revalidated']) > 60) {
+    if ($metodo === 'POST' || $ahora - (int)($_SESSION['_last_revalidated'] ?? 0) >= 60) {
         try {
-            $db  = getDB();
-            // Leer usuario y, si aplica, su restaurante en una sola consulta
-            $sql = "SELECT u.activo AS u_activo, u.rol,
-                           COALESCE(u.session_version, 1) AS session_version,
-                           r.activo AS r_activo
-                    FROM usuarios u
-                    LEFT JOIN restaurantes r ON r.id = u.restaurante_id
-                    WHERE u.id = ?
-                    LIMIT 1";
-            $st  = $db->prepare($sql);
+            $st = getDB()->prepare("SELECT u.activo AS usuario_activo, u.rol, u.session_version,
+                                             u.restaurante_id, r.activo AS restaurante_activo
+                                      FROM usuarios u LEFT JOIN restaurantes r ON r.id = u.restaurante_id
+                                      WHERE u.id = ?");
             $st->execute([$_SESSION['usuario_id']]);
             $fila = $st->fetch();
 
-            if (!$fila) {
-                $terminarSesion('Tu cuenta ya no existe.');
+            if (!$fila || !$fila['usuario_activo'] || $fila['rol'] !== $rol
+                || (int)$fila['session_version'] !== (int)($_SESSION['session_version'] ?? 0)
+                || ($rol !== 'superadmin' && (!$fila['restaurante_activo']
+                    || (int)$fila['restaurante_id'] !== (int)($_SESSION['restaurante_id'] ?? 0)))) {
+                $terminar_sesion('La sesión ya no es válida. Vuelve a iniciar sesión.');
             }
-            if (!$fila['u_activo']) {
-                $terminarSesion('Tu cuenta está desactivada. Contacta al administrador.');
-            }
-            if ($fila['rol'] !== $_SESSION['rol']) {
-                $terminarSesion('Tu rol ha cambiado. Vuelve a iniciar sesión.');
-            }
-            // Invalidación por cambio de contraseña (session_version)
-            $svSesion = $_SESSION['session_version'] ?? 1;
-            if ((int)$fila['session_version'] !== (int)$svSesion) {
-                $terminarSesion('Tu sesión fue invalidada. Vuelve a iniciar sesión.');
-            }
-            // Si tiene restaurante asignado, verificar que el restaurante siga activo
-            if (!empty($_SESSION['restaurante_id']) && isset($fila['r_activo']) && !$fila['r_activo']) {
-                $terminarSesion('El restaurante está desactivado. Contacta al superadministrador.');
-            }
-
             $_SESSION['_last_revalidated'] = $ahora;
         } catch (Throwable $e) {
-            // Si la BD falla, no forzar logout — el sistema sigue con los datos de sesión
-            error_log('requireRole revalidation error: ' . $e->getMessage());
+            error_log('No se pudo revalidar la sesión.');
+            http_response_code(503);
+            if ($es_ajax) jsonResponse(false, null, 'No se pudo verificar la sesión. Intenta nuevamente.');
+            exit('No se pudo verificar la sesión. Intenta nuevamente.');
         }
     }
 
-    // Permitir al superadmin cambiar el contexto del restaurante
-    if (isset($_GET['set_rest_id']) && isset($_SESSION['rol']) && $_SESSION['rol'] === 'superadmin') {
-        $nuevoRestId = (int)$_GET['set_rest_id'];
-        try {
-            $db = getDB();
-            $st = $db->prepare("SELECT id FROM restaurantes WHERE id = ? AND activo = 1");
-            $st->execute([$nuevoRestId]);
-            if ($st->fetch()) {
-                $_SESSION['restaurante_id'] = $nuevoRestId;
+    if ($rol === 'superadmin' && $roles_permitidos !== ['superadmin']) {
+        $rechazar_contexto = static function (string $motivo, bool $redirigir = false) use ($es_ajax): never {
+            if ($es_ajax) {
+                http_response_code(409);
+                jsonResponse(false, null, $motivo);
             }
-        } catch (Exception $e) {
-            // Ignore if db fails, just don't change the context
-        }
-    }
-
-    // Las rutas exclusivas del superadmin (incluidos sus endpoints) funcionan sin
-    // restaurante seleccionado. Las rutas operativas sí necesitan ese contexto.
-    if (!empty($_SESSION['rol']) && $_SESSION['rol'] === 'superadmin') {
-        $esRutaGlobalSuperadmin = count($rolesPermitidos) === 1 &&
-                                  in_array('superadmin', $rolesPermitidos, true);
-
-        if (empty($_SESSION['restaurante_id']) && !$esRutaGlobalSuperadmin) {
-            if ($esAjax) {
-                jsonResponse(false, null, 'Selecciona un restaurante para continuar');
-            } else {
+            if ($redirigir) {
                 header('Location: ' . BASE_URL . '/roles/superadmin/dashboard.php');
                 exit;
             }
+            http_response_code(409);
+            exit($motivo);
+        };
+
+        $restaurante_id = (int)($_SESSION['restaurante_id'] ?? 0);
+        if (!$restaurante_id || empty($_SESSION['_contexto_restaurante'])) {
+            $rechazar_contexto('Selecciona un restaurante para continuar.', $metodo === 'GET');
+        }
+        if ($metodo === 'POST' || $es_ajax) {
+            $esperado = $_SERVER['HTTP_X_RESTAURANTE_ESPERADO'] ?? $_POST['restaurante_esperado'] ?? null;
+            $token = $_SERVER['HTTP_X_CONTEXTO_RESTAURANTE'] ?? $_POST['contexto_restaurante'] ?? null;
+            if (!contexto_restaurante_valido($_SESSION, $esperado, $token)) {
+                $rechazar_contexto('El restaurante de esta pestaña cambió. Recarga la página antes de continuar.');
+            }
+        }
+
+        try {
+            $st = getDB()->prepare("SELECT nombre FROM restaurantes WHERE id = ? AND activo = 1");
+            $st->execute([$restaurante_id]);
+            $nombre = $st->fetchColumn();
+            if ($nombre === false) {
+                unset($_SESSION['restaurante_id'], $_SESSION['_contexto_restaurante'], $_SESSION['_nombre_contexto_restaurante']);
+                $rechazar_contexto('El restaurante seleccionado ya no está disponible.', $metodo === 'GET');
+            }
+            $_SESSION['_nombre_contexto_restaurante'] = $nombre;
+        } catch (Throwable $e) {
+            error_log('No se pudo verificar el restaurante seleccionado.');
+            http_response_code(503);
+            if ($es_ajax) jsonResponse(false, null, 'No se pudo verificar el restaurante. Intenta nuevamente.');
+            exit('No se pudo verificar el restaurante. Intenta nuevamente.');
         }
     }
 
-    if (!isset($_SESSION['usuario_id']) || !in_array($_SESSION['rol'], $rolesPermitidos)) {
-        if ($esAjax) {
-            jsonResponse(false, null, 'No autorizado');
-        } else {
-            header('Location: ' . BASE_URL . '/index.php');
-            exit;
-        }
-    }
+    $_SESSION['_actividad_sesion'] = $ahora;
 }
 
-
-/**
- * CSRF Protection
- */
 function getCsrfToken(): string {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
     if (empty($_SESSION['csrf_token'])) {
-        try {
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-        } catch (Exception $e) {
-            $_SESSION['csrf_token'] = bin2hex(openssl_random_pseudo_bytes(32));
-        }
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
     return $_SESSION['csrf_token'];
 }
 
 function validateCsrfToken($token): bool {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
-    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+    return is_string($token) && isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
 
 function verifyCsrfProtection(): void {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        // php://input solo se puede leer una vez; se cachea globalmente para reutilizar en los endpoints
-        if (!isset($GLOBALS['_RAW_INPUT'])) {
-            $GLOBALS['_RAW_INPUT'] = file_get_contents('php://input');
-        }
-        $jsonPayload = json_decode($GLOBALS['_RAW_INPUT'], true);
-        $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_POST['csrf_token'] ?? ($jsonPayload['csrf_token'] ?? '');
-        
-        if (!validateCsrfToken($token)) {
-            $esAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) ||
-                      (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) ||
-                      isset($_SERVER['HTTP_X_CSRF_TOKEN']);
-                      
-            if ($esAjax) {
-                jsonResponse(false, null, 'Error de seguridad: Token CSRF inválido.');
-            } else {
-                http_response_code(403);
-                die('Error de seguridad: Token CSRF inválido.');
-            }
-        }
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') return;
+
+    $GLOBALS['_RAW_INPUT'] ??= file_get_contents('php://input');
+    $json_payload = json_decode($GLOBALS['_RAW_INPUT'], true);
+    $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_POST['csrf_token'] ?? ($json_payload['csrf_token'] ?? '');
+    if (!validateCsrfToken($token)) {
+        http_response_code(403);
+        if (es_peticion_ajax()) jsonResponse(false, null, 'La sesión del formulario expiró. Recarga la página.');
+        exit('La sesión del formulario expiró. Recarga la página.');
     }
 }
 
+iniciar_sesion();
+if (sesion_expirada($_SESSION, time())) {
+    destruir_sesion();
+    iniciar_sesion();
+}
 getCsrfToken();
 verifyCsrfProtection();

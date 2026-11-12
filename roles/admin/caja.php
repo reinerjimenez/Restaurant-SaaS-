@@ -3,75 +3,39 @@
  * roles/admin/caja.php — Gestión de Apertura y Cierre de Caja
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
 $db = getDB();
 
-// Turno activo
-$stTurnoActivo = $db->prepare("
+require_once __DIR__ . '/../../config/finanzas.php';
+require_once __DIR__ . '/../../includes/reportes_financieros.php';
+
+// La caja abierta y el cierre usan la misma contabilidad de movimientos por turno.
+$st_turno_activo = $db->prepare("
     SELECT t.*, u.nombre AS abierto_por
     FROM turnos t
     JOIN usuarios u ON u.id = t.usuario_id
     WHERE t.restaurante_id = ? AND t.fin IS NULL
-    ORDER BY t.inicio DESC LIMIT 1
+    ORDER BY t.id DESC LIMIT 1
 ");
-$stTurnoActivo->execute([$restauranteId]);
-$turnoActivo = $stTurnoActivo->fetch();
-
-// Recalcular totales en tiempo real desde pagos (para visualización precisa)
+$st_turno_activo->execute([$restauranteId]);
+$turnoActivo = $st_turno_activo->fetch();
 if ($turnoActivo) {
-    $stTotalesRT = $db->prepare("
-        SELECT p.metodo, SUM(p.monto) as total
-        FROM pagos p
-        JOIN pedidos pe ON pe.id = p.pedido_id
-        WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado' AND p.anulado = 0 AND pe.updated_at >= ?
-        GROUP BY p.metodo
-    ");
-    $stTotalesRT->execute([$restauranteId, $turnoActivo['inicio']]);
-    $pagosRT = $stTotalesRT->fetchAll();
-    // Resetear y recalcular
-    $turnoActivo['total_efectivo'] = 0;
-    $turnoActivo['total_yape'] = 0;
-    $turnoActivo['total_transferencia'] = 0;
-    $turnoActivo['total_tarjeta'] = 0;
-    $turnoActivo['total_otros'] = 0;
-    $turnoActivo['total_general'] = 0;
-    foreach ($pagosRT as $pRT) {
-        $m = floatval($pRT['total']);
-        switch($pRT['metodo']) {
-            case 'efectivo':      $turnoActivo['total_efectivo'] += $m; break;
-            case 'yape':          $turnoActivo['total_yape'] += $m; break;
-            case 'transferencia': $turnoActivo['total_transferencia'] += $m; break;
-            case 'tarjeta':       $turnoActivo['total_tarjeta'] += $m; break;
-            default:              $turnoActivo['total_otros'] += $m; break;
-        }
-        $turnoActivo['total_general'] += $m;
-    }
-
-    $stGastosAct = $db->prepare("SELECT COALESCE(SUM(monto), 0) FROM gastos WHERE restaurante_id = ? AND created_at >= ? AND activo = 1");
-    $stGastosAct->execute([$restauranteId, $turnoActivo['inicio']]);
-    $turnoActivo['total_gastos'] = floatval($stGastosAct->fetchColumn());
+    $turnoActivo = array_replace($turnoActivo, resumen_turno($db, (int)$restauranteId, (int)$turnoActivo['id']));
 }
 
-// Filtro por fecha (día, mes, año)
-$fechaFiltro = $_GET['fecha'] ?? date('Y-m-d');
-
-// Historial de turnos cerrados del día
-$stHistorial = $db->prepare("
-    SELECT t.*, u.nombre AS abierto_por,
-           (SELECT COUNT(pe.id) FROM pedidos pe WHERE pe.restaurante_id = t.restaurante_id AND pe.estado = 'cobrado' AND pe.updated_at BETWEEN t.inicio AND t.fin) as num_pedidos,
-           (SELECT COALESCE(SUM(g.monto), 0) FROM gastos g WHERE g.restaurante_id = t.restaurante_id AND g.created_at BETWEEN t.inicio AND t.fin AND g.activo = 1) as total_gastos
+$fechaFiltro = fecha_reporte($_GET['fecha'] ?? null, date('Y-m-d'));
+$st_historial = $db->prepare("
+    SELECT t.*, u.nombre AS abierto_por
     FROM turnos t
     JOIN usuarios u ON u.id = t.usuario_id
-    WHERE t.restaurante_id = ? AND t.fin IS NOT NULL
-      AND DATE(t.inicio) = ?
+    WHERE t.restaurante_id = ? AND t.fin IS NOT NULL AND t.inicio >= ? AND t.inicio < ?
     ORDER BY t.inicio DESC
 ");
-$stHistorial->execute([$restauranteId, $fechaFiltro]);
-$historial = $stHistorial->fetchAll();
+$st_historial->execute([$restauranteId, $fechaFiltro, limite_exclusivo_reporte($fechaFiltro)]);
+$historial = $st_historial->fetchAll();
 
 $pageTitle  = 'Caja';
 $activeMenu = 'caja';
@@ -356,6 +320,7 @@ require_once '../../includes/header.php';
     <!-- Totales del turno actual -->
     <div class="card mb-24">
         <div class="card-title"><i class="fa-solid fa-coins"></i> Totales del Turno Actual</div>
+        <p style="margin-bottom:12px;color:var(--text-secondary);">Los cobros netos incluyen los reversos de este turno. Los gastos se muestran por turno de registro.</p>
 
         <div class="caja-totales-grid">
             <?php
@@ -382,16 +347,20 @@ require_once '../../includes/header.php';
         <div class="caja-total-general">
             <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:32px;">
                 <div style="text-align:center;">
-                    <div class="label" style="margin-bottom:4px;color:var(--text-secondary);"><i class="fa-solid fa-sack-dollar" style="margin-right:6px;color:var(--success);"></i>Total Ingresos</div>
+                    <div class="label" style="margin-bottom:4px;color:var(--text-secondary);">Reversos</div>
+                    <div class="monto" style="font-size:1.6rem;">S/ <?= number_format($turnoActivo['total_reversos'], 2) ?></div>
+                </div>
+                <div style="text-align:center;">
+                    <div class="label" style="margin-bottom:4px;color:var(--text-secondary);"><i class="fa-solid fa-sack-dollar" style="margin-right:6px;color:var(--success);"></i>Cobros netos</div>
                     <div class="monto" style="font-size:1.6rem;color:var(--text-primary);">S/ <?= number_format(floatval($turnoActivo['total_general'] ?? 0), 2) ?></div>
                 </div>
                 <div style="text-align:center;">
-                    <div class="label" style="margin-bottom:4px;color:var(--text-secondary);"><i class="fa-solid fa-money-bill-transfer" style="margin-right:6px;color:var(--danger);"></i>Total Gastos</div>
+                    <div class="label" style="margin-bottom:4px;color:var(--text-secondary);"><i class="fa-solid fa-money-bill-transfer" style="margin-right:6px;color:var(--danger);"></i>Gastos registrados</div>
                     <div class="monto" style="font-size:1.6rem;color:var(--text-primary);">S/ <?= number_format(floatval($turnoActivo['total_gastos'] ?? 0), 2) ?></div>
                 </div>
                 <div style="text-align:center;">
-                    <div class="label" style="margin-bottom:4px;color:var(--text-secondary);"><i class="fa-solid fa-piggy-bank" style="margin-right:6px;color:var(--primary);"></i>Utilidad</div>
-                    <div class="monto" style="font-size:1.6rem;color:var(--primary);">S/ <?= number_format(floatval($turnoActivo['total_general'] ?? 0) - floatval($turnoActivo['total_gastos'] ?? 0), 2) ?></div>
+                    <div class="label" style="margin-bottom:4px;color:var(--text-secondary);"><i class="fa-solid fa-piggy-bank" style="margin-right:6px;color:var(--primary);"></i>Saldo después de gastos</div>
+                    <div class="monto" style="font-size:1.6rem;color:var(--primary);">S/ <?= number_format((centimos_reporte($turnoActivo['total_general']) - centimos_reporte($turnoActivo['total_gastos'])) / 100, 2) ?></div>
                 </div>
             </div>
         </div>
@@ -410,6 +379,7 @@ require_once '../../includes/header.php';
         <?php if ($historial): ?>
         <div>
             <?php foreach ($historial as $i => $t):
+                $cierre = leer_cierre_turno($t);
                 $inicio   = strtotime($t['inicio']);
                 $fin      = strtotime($t['fin']);
                 $duracion = $fin - $inicio;
@@ -439,34 +409,29 @@ require_once '../../includes/header.php';
                         ];
                         foreach ($metodosMini as $campo => [$lbl, $clr]):
                             $m = floatval($t[$campo] ?? 0);
-                            if ($m <= 0) continue;
+                            if ($m == 0) continue;
                         ?>
                         <span style="font-size:.7rem;padding:2px 8px;border-radius:999px;background:<?= $clr ?>22;color:<?= $clr ?>;border:1px solid <?= $clr ?>44;font-weight:600;">
                             <?= $lbl ?>: S/ <?= number_format($m, 2) ?>
                         </span>
                         <?php endforeach; ?>
-                        <?php if (floatval($t['total_gastos'] ?? 0) > 0): ?>
+                        <?php if ($cierre !== null): ?>
                         <span style="font-size:.7rem;padding:2px 8px;border-radius:999px;background:#ef444422;color:#ef4444;border:1px solid #ef444444;font-weight:600;">
-                            <i class="fa-solid fa-money-bill-transfer"></i> Gastos: S/ <?= number_format(floatval($t['total_gastos']), 2) ?>
+                            <i class="fa-solid fa-money-bill-transfer"></i> Gastos: S/ <?= number_format($cierre['total_gastos'], 2) ?>
                         </span>
                         <?php endif; ?>
                     </div>
                 </div>
                 <div class="historial-monto">
-                    <?php if (floatval($t['total_general']) == 0): ?>
                     <div class="monto-info">
-                        <div style="font-size:.85rem;font-weight:700;color:var(--warning,#f59e0b);background:#fffbeb;padding:4px 8px;border-radius:4px;border:1px solid #fde68a;display:inline-block;">Sin ventas</div>
-                        <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px;">0 pedidos</div>
+                        <div style="font-size:1rem;font-weight:800;color:var(--text-primary);">S/ <?= number_format($t['total_general'], 2) ?></div>
+                        <div style="font-size:.72rem;color:var(--text-muted);">
+                            <?= $cierre === null ? 'Cierre histórico sin desglose' : (int)$cierre['num_pedidos'] . ' pedido(s)' ?>
+                        </div>
                     </div>
-                    <?php else: ?>
-                    <div class="monto-info">
-                        <div style="font-size:1rem;font-weight:800;color:var(--success);">S/ <?= number_format(floatval($t['total_general']), 2) ?></div>
-                        <div style="font-size:.72rem;color:var(--text-muted);"><?= $t['num_pedidos'] ?> pedido(s)</div>
-                    </div>
-                    <a href="turno_detalle.php?id=<?= $t['id'] ?>" class="btn btn-ghost btn-sm" style="font-size:.75rem;padding:4px 8px;margin-top:6px;">
+                    <a href="turno_detalle.php?id=<?= (int)$t['id'] ?>" class="btn btn-ghost btn-sm" style="min-height:44px;font-size:.75rem;padding:4px 8px;margin-top:6px;">
                         <i class="fa-solid fa-chart-pie"></i> Detalles
                     </a>
-                    <?php endif; ?>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -503,7 +468,7 @@ require_once '../../includes/header.php';
             </div>
             <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
                 <span style="color:var(--text-secondary);">Otros Métodos:</span>
-                <strong>S/ <?= number_format(floatval($turnoActivo['total_general']) - floatval($turnoActivo['total_efectivo']), 2) ?></strong>
+                <strong>S/ <?= number_format((centimos_reporte($turnoActivo['total_general']) - centimos_reporte($turnoActivo['total_efectivo'])) / 100, 2) ?></strong>
             </div>
             <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
                 <span style="color:var(--text-primary);font-weight:700;">Total Acumulado:</span>
@@ -547,7 +512,7 @@ function cerrarCaja(reabrir) {
     fetch('<?= BASE_URL ?>/api/cerrar_turno.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reabrir: reabrir })
+        body: JSON.stringify({ reabrir, turno_id: <?= (int)($turnoActivo['id'] ?? 0) ?> })
     })
     .then(r => r.json())
     .then(data => {

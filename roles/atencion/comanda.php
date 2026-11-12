@@ -3,7 +3,6 @@
  * roles/atencion/comanda.php — Tomar y añadir platos a un pedido
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 
@@ -34,10 +33,10 @@ $stProds->execute([$restauranteId]);
 $productos = $stProds->fetchAll();
 
 $stItems = $db->prepare("
-    SELECT pi.*, pr.nombre AS producto_nombre,
+    SELECT pi.*, COALESCE(pi.nombre_producto, pr.nombre, 'Producto no disponible') AS producto_nombre,
            GROUP_CONCAT(ov.valor SEPARATOR ' · ') AS opciones_texto
     FROM pedido_items pi
-    JOIN productos pr ON pr.id = pi.producto_id
+    LEFT JOIN productos pr ON pr.id = pi.producto_id
     LEFT JOIN pedido_item_opciones pio ON pio.item_id = pi.id
     LEFT JOIN opciones_valor ov ON ov.id = pio.valor_id
     WHERE pi.pedido_id = ?
@@ -264,8 +263,11 @@ require_once '../../includes/header.php';
 <script>
 const PEDIDO_ID      = <?= $pedidoId ?>;
 const RESTAURANTE_ID = <?= $restauranteId ?>;
+const CLAVE_ENVIO = `comanda:${RESTAURANTE_ID}:<?= (int)$_SESSION['usuario_id'] ?>:${PEDIDO_ID}`;
+let envioPendiente = null;
+let enviando = false;
 let nuevosItems      = [];
-let nuevoTotal       = 0;
+let nuevoTotal = 0; // Céntimos.
 let catActual = '', textoBuscado = '';
 
 function aplicarFiltros() {
@@ -287,11 +289,14 @@ function filtrarCat(catId, btn) {
 function buscarPlatos(texto) { textoBuscado = texto; aplicarFiltros(); }
 
 async function agregarProducto(producto) {
+    if (envioPendiente) { Toast.advertencia('Confirma primero el envío pendiente.'); return; }
     let selecciones = [];
     if (producto.tiene_opciones == 1) {
         selecciones = await mostrarOpcionesSecuenciales(producto.id, producto.nombre);
         if (selecciones === null) return;
     }
+    if (envioPendiente) return;
+    if (nuevosItems.length >= 100) { Toast.advertencia('Envía esta tanda antes de agregar más platos.'); return; }
 
     const item = {
         producto_id:  producto.id,
@@ -304,9 +309,15 @@ async function agregarProducto(producto) {
     };
 
     nuevosItems.push(item);
-    nuevoTotal += item.precio;
+    nuevoTotal += Math.round(Number(item.precio) * 100);
     renderNuevosItems();
     Toast.exito(`${producto.nombre} añadido`);
+}
+
+function textoComanda(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, caracter => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[caracter]));
 }
 
 function renderNuevosItems() {
@@ -342,7 +353,7 @@ function renderNuevosItems() {
     cont.style.flexDirection = 'column';
     
     cont.innerHTML = `<div style="font-size:.75rem;font-weight:700;color:var(--warning);padding:8px 0;flex-shrink:0;">
-        <i class="fa-solid fa-hourglass-half"></i> Por enviar a cocina:
+        <i class="fa-solid fa-hourglass-half"></i> ${envioPendiente ? 'Envío pendiente de confirmación:' : 'Por enviar a cocina:'}
     </div>`;
 
     // Agrupar por clave única: nombre + opciones (pero separados siempre si tienen opciones)
@@ -356,14 +367,14 @@ function renderNuevosItems() {
         if (grupos.has(clave)) {
             const g = grupos.get(clave);
             g.cantidad++;
-            g.subtotal += it.precio;
+            g.subtotal += Math.round(Number(it.precio) * 100);
             g.indices.push(i);
         } else {
             grupos.set(clave, {
                 nombre:      it.nombre,
                 opciones_str:it.opciones_str,
                 precio:      it.precio,
-                subtotal:    it.precio,
+                subtotal:    Math.round(Number(it.precio) * 100),
                 cantidad:    1,
                 indices:     [i],
                 notas:       it.notas,
@@ -377,12 +388,12 @@ function renderNuevosItems() {
             <div class="pedido-item" style="flex-direction:column;align-items:stretch;gap:5px;">
                 <div style="display:flex;align-items:center;gap:8px;">
                     <div style="flex:1;">
-                        <div class="pedido-item-nombre">${g.cantidad}x ${g.nombre}</div>
-                        ${g.opciones_str ? `<div class="pedido-item-opciones">${g.opciones_str}</div>` : ''}
+                        <div class="pedido-item-nombre">${g.cantidad}x ${textoComanda(g.nombre)}</div>
+                        ${g.opciones_str ? `<div class="pedido-item-opciones">${textoComanda(g.opciones_str)}</div>` : ''}
                     </div>
-                    <span class="pedido-item-precio">S/ ${g.subtotal.toFixed(2)}</span>
-                    <button onclick="quitarGrupo(${JSON.stringify(g.indices)})"
-                        style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:.875rem;flex-shrink:0;min-height:28px;display:flex;align-items:center;">
+                    <span class="pedido-item-precio">S/ ${(g.subtotal / 100).toFixed(2)}</span>
+                    <button type="button" aria-label="Quitar producto" onclick="quitarGrupo(${JSON.stringify(g.indices)})" ${envioPendiente ? 'disabled' : ''}
+                        style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:.875rem;flex-shrink:0;min-height:44px;min-width:44px;display:flex;align-items:center;">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
@@ -390,40 +401,45 @@ function renderNuevosItems() {
                     id="nota-grupo-${gi}"
                     rows="1"
                     placeholder="Nota para cocina (opcional)\u2026"
+                    ${envioPendiente ? 'readonly' : ''}
                     oninput="actualizarNotaGrupo(${JSON.stringify(g.indices)}, this.value)"
                     style="width:100%;font-size:.78rem;border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:5px 8px;background:var(--bg-secondary);color:var(--text-primary);resize:none;font-family:var(--font);outline:none;transition:border-color var(--transition);"
                     onfocus="this.style.borderColor='var(--warning)'"
                     onblur="this.style.borderColor='var(--border)'"
-                >${g.notas}</textarea>
+                >${textoComanda(g.notas)}</textarea>
             </div>`;
         gi++;
     });
 
-    document.getElementById('btn-enviar').disabled = false;
+    document.getElementById('btn-enviar').disabled = enviando;
     document.getElementById('nuevo-total-row').style.display = 'flex';
-    document.getElementById('nuevo-total-val').textContent = `S/ ${nuevoTotal.toFixed(2)}`;
+    document.getElementById('nuevo-total-val').textContent = `S/ ${(nuevoTotal / 100).toFixed(2)}`;
     actualizarEstadoCobrar();
 }
 
 function actualizarNotaGrupo(indices, valor) {
+    if (envioPendiente) return;
     indices.forEach(i => { if (nuevosItems[i]) nuevosItems[i].notas = valor.trim(); });
 }
 
 function quitarGrupo(indices) {
+    if (envioPendiente) return;
     // Quitar de mayor a menor índice para no desfasar el array
     [...indices].sort((a, b) => b - a).forEach(i => {
-        nuevoTotal -= nuevosItems[i].precio;
+        nuevoTotal -= Math.round(Number(nuevosItems[i].precio) * 100);
         nuevosItems.splice(i, 1);
     });
     renderNuevosItems();
 }
 
 function actualizarNota(idx, valor) {
+    if (envioPendiente) return;
     if (nuevosItems[idx]) nuevosItems[idx].notas = valor.trim();
 }
 
 function quitarNuevo(idx) {
-    nuevoTotal -= nuevosItems[idx].precio;
+    if (envioPendiente) return;
+    nuevoTotal -= Math.round(Number(nuevosItems[idx].precio) * 100);
     nuevosItems.splice(idx, 1);
     renderNuevosItems();
 }
@@ -447,11 +463,11 @@ function actualizarCountItems() {
     const baseItems  = <?= count($items) ?>;
     const totalItems = baseItems + nuevosItems.length;
     const totalBase  = <?= $pedido['total'] ?>;
-    const totalMostrar = totalBase + nuevoTotal;
+    const totalMostrar = Math.round(totalBase * 100) + nuevoTotal;
     const barraCount = document.getElementById('barra-items-count');
     const barraSub   = document.getElementById('barra-subtotal');
     if (barraCount) barraCount.textContent = `${totalItems} plato(s)`;
-    if (barraSub)   barraSub.textContent   = `S/ ${totalMostrar.toFixed(2)}`;
+    if (barraSub)   barraSub.textContent   = `S/ ${(totalMostrar / 100).toFixed(2)}`;
 }
 
 function togglePanelPedido() {
@@ -460,31 +476,62 @@ function togglePanelPedido() {
 }
 
 async function enviarACocina() {
-    if (!nuevosItems.length) return;
+    if (enviando || !nuevosItems.length) return;
     const btn = document.getElementById('btn-enviar');
-    btn.disabled = true;
+    if (!envioPendiente) {
+        const bytes = crypto.getRandomValues(new Uint8Array(16));
+        const operacion_id = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        envioPendiente = JSON.stringify({ pedido_id: PEDIDO_ID, items: nuevosItems, operacion_id });
+        try {
+            sessionStorage.setItem(CLAVE_ENVIO, envioPendiente);
+        } catch (_) {
+            // Si el navegador bloquea el almacenamiento, se conserva en esta pestaña.
+        }
+    }
+    enviando = true;
+    renderNuevosItems();
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
 
     try {
         const res  = await fetch(`${BASE_URL}/api/agregar_item.php`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-            body: JSON.stringify({ pedido_id: PEDIDO_ID, items: nuevosItems })
+            body: envioPendiente
         });
         const json = await res.json();
         if (json.success) {
+            limpiarEnvioPendiente();
             Toast.exito('¡Pedido enviado a cocina!');
             setTimeout(() => window.location.href = 'dashboard.php', 800);
-        } else {
-            Toast.error(json.message);
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar a cocina';
+            return;
         }
+        if (json.data?.envio_rechazado) limpiarEnvioPendiente();
+        Toast.error(json.message);
     } catch(e) {
-        Toast.error('Error de conexión');
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar a cocina';
+        Toast.error('No se confirmó el envío. Reintenta el mismo envío sin duplicarlo.');
     }
+    enviando = false;
+    renderNuevosItems();
+    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> ' + (envioPendiente ? 'Reintentar envío' : 'Enviar a cocina');
+}
+
+function limpiarEnvioPendiente() {
+    envioPendiente = null;
+    try { sessionStorage.removeItem(CLAVE_ENVIO); } catch (_) {}
+}
+
+try {
+    const guardado = sessionStorage.getItem(CLAVE_ENVIO);
+    const envio = guardado ? JSON.parse(guardado) : null;
+    if (envio?.pedido_id === PEDIDO_ID && Array.isArray(envio.items) && envio.items.length) {
+        envioPendiente = guardado;
+        nuevosItems = envio.items;
+        nuevoTotal = nuevosItems.reduce((suma, item) => suma + Math.round(Number(item.precio) * 100), 0);
+        renderNuevosItems();
+        document.getElementById('btn-enviar').textContent = 'Reintentar envío';
+    }
+} catch (_) {
+    limpiarEnvioPendiente();
 }
 </script>
 

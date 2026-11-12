@@ -3,7 +3,6 @@
  * api/admin_mesas.php — CRUD de mesas (admin)
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 
@@ -55,13 +54,14 @@ switch ($accion) {
         $id = (int)($input['id'] ?? 0);
         if (!$id) jsonResponse(false, null, 'ID requerido');
 
-        // Verificar que no tenga pedidos activos
-        $stPed = $db->prepare("SELECT COUNT(*) FROM pedidos WHERE mesa_id = ? AND restaurante_id = ? AND estado = 'activo'");
-        $stPed->execute([$id, $restauranteId]);
-        if ($stPed->fetchColumn() > 0) jsonResponse(false, null, 'No se puede eliminar: la mesa tiene un pedido activo');
-
-        $st = $db->prepare("DELETE FROM mesas WHERE id=? AND restaurante_id=?");
-        $st->execute([$id, $restauranteId]);
+        require_once '../config/finanzas.php';
+        try {
+            $db->beginTransaction();
+            eliminar_mesa_sin_pedido($db, (int)$restauranteId, $id);
+            $db->commit();
+        } catch (Throwable $error) {
+            error_financiero($db, $error, 'Error al eliminar mesa');
+        }
         jsonResponse(true, null, 'Mesa eliminada correctamente');
 
     default:

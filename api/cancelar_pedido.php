@@ -4,9 +4,9 @@
  * Solo para admin/superadmin
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
+require_once '../config/finanzas.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
@@ -20,14 +20,8 @@ $db = getDB();
 
 try {
     $db->beginTransaction();
-
-    $stPed = $db->prepare("SELECT mesa_id FROM pedidos WHERE id = ? AND restaurante_id = ? AND estado = 'activo' FOR UPDATE");
-    $stPed->execute([$pedidoId, $restauranteId]);
-    $pedido = $stPed->fetch();
-    if (!$pedido) {
-        $db->rollBack();
-        jsonResponse(false, null, 'Pedido no encontrado o ya procesado');
-    }
+    bloquear_restaurante($db, $restauranteId);
+    $pedido = bloquear_pedido($db, $restauranteId, $pedidoId, 'activo');
 
     $mesaNumero = null;
     if ($pedido['mesa_id']) {
@@ -47,22 +41,16 @@ try {
     }
 
     // Cancelar pedido
-    $stCan = $db->prepare("UPDATE pedidos SET estado = 'cancelado' WHERE id = ?");
-    $stCan->execute([$pedidoId]);
+    $stCan = $db->prepare("UPDATE pedidos SET estado = 'cancelado' WHERE id = ? AND restaurante_id = ?");
+    $stCan->execute([$pedidoId, $restauranteId]);
 
     // Liberar mesa
-    if ($pedido['mesa_id']) {
-        $stMesa = $db->prepare("UPDATE mesas m SET estado = 'libre' WHERE m.id = ? AND NOT EXISTS (SELECT 1 FROM pedidos p WHERE p.mesa_id = m.id AND p.estado = 'activo')");
-        $stMesa->execute([$pedido['mesa_id']]);
-    }
-
-    $db->commit();
+    liberar_mesa($db, $restauranteId, $pedido['mesa_id']);
     $ubicacion = $mesaNumero ? 'Mesa ' . $mesaNumero : 'Para llevar';
-    registrarAuditoria($db, 'Canceló comanda', "Pedido #$pedidoId · $ubicacion");
+    registrarAuditoria($db, 'Canceló comanda', "Pedido #$pedidoId · $ubicacion", true);
+    $db->commit();
     jsonResponse(true, null, 'Pedido cancelado y mesa liberada');
 
-} catch (PDOException $e) {
-    $db->rollBack();
-    error_log('Error al cancelar: ' . $e->getMessage());
-    jsonResponse(false, null, 'Ocurrió un error interno en el servidor.');
+} catch (Throwable $e) {
+    error_financiero($db, $e, 'Error al cancelar pedido');
 }

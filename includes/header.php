@@ -5,6 +5,8 @@
  * Sistema SaaS Restaurante | R.DEV
  */
 
+if (!defined('BASE_URL') || empty($_SESSION['usuario_id']) || empty($_SESSION['rol'])) return;
+
 // Determinar el rol para badge y colores
 $rolLabel = [
     'superadmin' => 'Super Admin',
@@ -63,26 +65,34 @@ if (!empty($_SESSION['restaurante_id']) && $_SESSION['rol'] !== 'superadmin') {
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <script>
-        window.BASE_URL = "<?= BASE_URL ?>";
-        window.CSRF_TOKEN = "<?= $_SESSION['csrf_token'] ?? '' ?>";
-
-        // Intercept fetch to add CSRF token automatically
-        const originalFetch = window.fetch;
-        window.fetch = function() {
-            let args = Array.prototype.slice.call(arguments);
-            let config = args[1] || {};
-            
-            if (config.method && config.method.toUpperCase() === 'POST') {
-                config.headers = config.headers || {};
-                if (config.headers instanceof Headers) {
-                    config.headers.append('X-CSRF-Token', window.CSRF_TOKEN);
-                } else {
-                    config.headers['X-CSRF-Token'] = window.CSRF_TOKEN;
+        window.BASE_URL = <?= json_encode(BASE_URL, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        window.CSRF_TOKEN = <?= json_encode(getCsrfToken()) ?>;
+        (() => {
+            const contexto = <?= json_encode(
+                $_SESSION['rol'] === 'superadmin' && !empty($_SESSION['_contexto_restaurante'])
+                    ? ['id' => (int)$_SESSION['restaurante_id'], 'token' => $_SESSION['_contexto_restaurante']]
+                    : null
+            ) ?>;
+            const app = new URL(window.BASE_URL.replace(/\/$/, '') + '/', window.location.origin);
+            const original_fetch = window.fetch.bind(window);
+            window.fetch = (input, opciones = {}) => {
+                const solicitud = input instanceof Request ? input : null;
+                const url = new URL(solicitud ? solicitud.url : input, window.location.href);
+                if (app.origin !== window.location.origin || url.origin !== app.origin
+                    || !url.pathname.startsWith(app.pathname + 'api/')) {
+                    return original_fetch(input, opciones);
                 }
-                args[1] = config;
-            }
-            return originalFetch.apply(this, args);
-        };
+                const metodo = (opciones.method || solicitud?.method || 'GET').toUpperCase();
+                const cabeceras = new Headers(opciones.headers ?? solicitud?.headers);
+                if (metodo === 'POST') cabeceras.set('X-CSRF-Token', window.CSRF_TOKEN);
+                if (contexto) {
+                    cabeceras.set('X-Restaurante-Esperado', String(contexto.id));
+                    cabeceras.set('X-Contexto-Restaurante', contexto.token);
+                }
+                // Las API no redirigen: los tokens solo deben ir a la ruta validada.
+                return original_fetch(input, { ...opciones, headers: cabeceras, redirect: 'error' });
+            };
+        })();
     </script>
     <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= filemtime(__DIR__ . '/../assets/css/main.css') ?>">
 </head>
@@ -104,9 +114,14 @@ if (!empty($_SESSION['restaurante_id']) && $_SESSION['rol'] !== 'superadmin') {
         <?php endif; ?>
     </div>
     <div class="navbar-right">
+        <?php if ($_SESSION['rol'] === 'superadmin' && isset($_SESSION['_nombre_contexto_restaurante'])): ?>
+            <span class="badge" title="Restaurante seleccionado">
+                <?= htmlspecialchars($_SESSION['_nombre_contexto_restaurante'], ENT_QUOTES, 'UTF-8') ?>
+            </span>
+        <?php endif; ?>
         <?php if (($_SESSION['rol'] ?? '') === 'superadmin' && strpos($_SERVER['REQUEST_URI'] ?? '', '/roles/admin/') !== false): ?>
             <a href="<?= BASE_URL ?>/roles/superadmin/dashboard.php"
-               style="margin-right:8px; color:rgba(255,255,255,.85); font-size:0.8rem; text-decoration:none; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px; border:1px solid rgba(255,255,255,.2); display:inline-flex; align-items:center; gap:6px;">
+               style="margin-right:8px; color:rgba(255,255,255,.85); font-size:0.8rem; text-decoration:none; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:6px; border:1px solid rgba(255,255,255,.2); display:inline-flex; align-items:center; gap:6px; min-height:44px;">
                <i class="fa-solid fa-arrow-left"></i> Panel global
             </a>
         <?php endif; ?>

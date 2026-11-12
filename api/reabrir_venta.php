@@ -1,132 +1,57 @@
 <?php
 /**
- * api/reabrir_venta.php — Reabre un pedido cobrado para ser modificado
- * Solo para admin/superadmin
- * Sistema SaaS Restaurante | R.DEV
+ * Reabre un pedido cobrado registrando el reverso en la caja actual.
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['admin', 'superadmin']);
+require_once '../config/finanzas.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
-$input = json_decode($GLOBALS['_RAW_INPUT'] ?? ($GLOBALS['_RAW_INPUT'] = file_get_contents('php://input')), true);
-$pedidoId      = (int)($input['id'] ?? 0);
-$restauranteId = $_SESSION['restaurante_id'];
+$input = json_decode($GLOBALS['_RAW_INPUT'] ?? file_get_contents('php://input'), true);
+$pedido_id = filter_var($input['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+if (!$pedido_id) jsonResponse(false, null, 'ID requerido');
 
-if (!$pedidoId) jsonResponse(false, null, 'ID requerido');
-
+$restaurante_id = (int)$_SESSION['restaurante_id'];
+$usuario_id = (int)$_SESSION['usuario_id'];
 $db = getDB();
 
 try {
     $db->beginTransaction();
-
-    // Cargar pedido con bloqueo (incluye mesa_id para restaurarla)
-    $stPed = $db->prepare("SELECT id, estado, mesa_id FROM pedidos WHERE id = ? AND restaurante_id = ? FOR UPDATE");
-    $stPed->execute([$pedidoId, $restauranteId]);
-    $pedido = $stPed->fetch();
-
-    if (!$pedido) {
-        $db->rollBack();
-        jsonResponse(false, null, 'Pedido no encontrado');
-    }
-
-    if ($pedido['estado'] !== 'cobrado') {
-        $db->rollBack();
-        jsonResponse(false, null, 'Solo se pueden modificar pedidos cobrados');
-    }
+    bloquear_restaurante($db, $restaurante_id);
+    $turno = exigir_turno_abierto($db, $restaurante_id);
+    $pedido = bloquear_pedido($db, $restaurante_id, $pedido_id, 'cobrado');
 
     if ($pedido['mesa_id']) {
-        $stMesa = $db->prepare("SELECT estado FROM mesas WHERE id = ? AND restaurante_id = ? FOR UPDATE");
-        $stMesa->execute([$pedido['mesa_id'], $restauranteId]);
-        $mesa = $stMesa->fetch();
-        $stActivo = $db->prepare("SELECT id FROM pedidos WHERE mesa_id = ? AND estado = 'activo' LIMIT 1");
-        $stActivo->execute([$pedido['mesa_id']]);
-        if (!$mesa || $mesa['estado'] !== 'libre' || $stActivo->fetch()) {
-            $db->rollBack();
-            jsonResponse(false, null, 'La mesa ya está ocupada o reservada. Cobra o cancela su pedido actual antes de reabrir esta venta.');
+        $mesa = $db->prepare('SELECT estado FROM mesas WHERE id = ? AND restaurante_id = ? AND activo = 1 FOR UPDATE');
+        $mesa->execute([$pedido['mesa_id'], $restaurante_id]);
+        $activo = $db->prepare("SELECT id FROM pedidos WHERE mesa_id = ? AND restaurante_id = ? AND estado = 'activo' LIMIT 1");
+        $activo->execute([$pedido['mesa_id'], $restaurante_id]);
+        if ($mesa->fetchColumn() !== 'libre' || $activo->fetchColumn()) {
+            throw new DomainException('La mesa no está disponible. Resuelve su estado antes de reabrir la venta.');
         }
     }
 
-    // 1. Obtener los pagos que se van a anular para revertir el turno
-    $stPagosElim = $db->prepare("
-        SELECT metodo, SUM(monto) AS total
-        FROM pagos
-        WHERE pedido_id = ? AND anulado = 0
-        GROUP BY metodo
-    ");
-    $stPagosElim->execute([$pedidoId]);
-    $pagosARevertir = $stPagosElim->fetchAll();
-    $totalRevertido = array_sum(array_column($pagosARevertir, 'total'));
+    $motivo = 'Pedido reabierto para modificación';
+    $reverso = revertir_pagos($db, $pedido, (int)$turno['id'], $usuario_id, $motivo);
+    $db->prepare('UPDATE comprobantes SET anulado = 1, motivo_anulacion = ?
+        WHERE pedido_id = ? AND restaurante_id = ? AND COALESCE(anulado, 0) = 0')
+        ->execute([$motivo, $pedido_id, $restaurante_id]);
 
-    // 2. Buscar el turno al que pertenecen estos pagos (el turno cuyo rango de tiempo incluye los pagos)
-    if ($totalRevertido > 0) {
-        $stTurno = $db->prepare("
-            SELECT t.id
-            FROM turnos t
-            JOIN pagos p ON p.pedido_id = ?
-            WHERE t.restaurante_id = ?
-              AND p.created_at >= t.inicio
-              AND (t.fin IS NULL OR p.created_at <= t.fin)
-            LIMIT 1
-        ");
-        $stTurno->execute([$pedidoId, $restauranteId]);
-        $turno = $stTurno->fetch();
-
-        if ($turno) {
-            // Restar los montos del turno correspondiente por método
-            $reversos = ['efectivo' => 0, 'yape' => 0, 'transferencia' => 0, 'tarjeta' => 0, 'otro' => 0];
-            foreach ($pagosARevertir as $pr) {
-                $m = $pr['metodo'];
-                if (isset($reversos[$m])) $reversos[$m] += floatval($pr['total']);
-            }
-
-            $stRev = $db->prepare("
-                UPDATE turnos
-                SET total_efectivo      = GREATEST(0, total_efectivo      - ?),
-                    total_yape          = GREATEST(0, total_yape          - ?),
-                    total_transferencia = GREATEST(0, total_transferencia - ?),
-                    total_tarjeta       = GREATEST(0, total_tarjeta       - ?),
-                    total_otros         = GREATEST(0, total_otros         - ?),
-                    total_general       = GREATEST(0, total_general       - ?)
-                WHERE id = ?
-            ");
-            $stRev->execute([
-                $reversos['efectivo'],
-                $reversos['yape'],
-                $reversos['transferencia'],
-                $reversos['tarjeta'],
-                $reversos['otro'],
-                $totalRevertido,
-                $turno['id'],
-            ]);
-        }
-    }
-
-    // 3. Marcar pagos registrados como anulados (borrado lógico) (se volverá a cobrar)
-    $stPagos = $db->prepare("UPDATE pagos SET anulado = 1, anulado_por = ?, anulado_en = NOW() WHERE pedido_id = ? AND anulado = 0");
-    $stPagos->execute([$_SESSION['usuario_id'], $pedidoId]);
-
-    // 4. Anular comprobante asociado si existe
-    $stComp = $db->prepare("UPDATE comprobantes SET anulado = 1, motivo_anulacion = 'Pedido reabierto para modificación' WHERE pedido_id = ? AND anulado = 0");
-    $stComp->execute([$pedidoId]);
-
-    // 5. Cambiar estado del pedido a activo
-    $stAct = $db->prepare("UPDATE pedidos SET estado = 'activo' WHERE id = ?");
-    $stAct->execute([$pedidoId]);
-
-    // 6. Reocupar la mesa validada antes de revertir los pagos
+    // El pedido activo guarda el subtotal; los ajustes siguen separados.
+    $subtotal = decimal_centimos(subtotal_pedido($db, $pedido_id));
+    $db->prepare("UPDATE pedidos SET estado = 'activo', total = ? WHERE id = ? AND restaurante_id = ?")
+        ->execute([$subtotal, $pedido_id, $restaurante_id]);
     if ($pedido['mesa_id']) {
-        $db->prepare("UPDATE mesas SET estado = 'ocupada' WHERE id = ?")
-           ->execute([$pedido['mesa_id']]);
+        $db->prepare("UPDATE mesas SET estado = 'ocupada' WHERE id = ? AND restaurante_id = ?")
+            ->execute([$pedido['mesa_id'], $restaurante_id]);
     }
 
+    $pagos = implode(', ', $reverso['pagos']);
+    registrarAuditoria($db, 'Reabrió venta y registró reverso',
+        "Pedido #$pedido_id · Turno #{$turno['id']} · Pagos $pagos · S/ {$reverso['monto']} → S/ 0.00 · $motivo", true);
     $db->commit();
-    registrarAuditoria($db, 'Reabrió venta', "Pedido #$pedidoId");
-    jsonResponse(true, null, 'Pedido reabierto correctamente');
-
-} catch (PDOException $e) {
-    $db->rollBack();
-    error_log('Error al reabrir pedido: ' . $e->getMessage());
-    jsonResponse(false, null, 'Ocurrió un error interno en el servidor.');
+    jsonResponse(true, null, 'Pedido reabierto correctamente.');
+} catch (Throwable $e) {
+    error_financiero($db, $e, 'Error al reabrir venta');
 }

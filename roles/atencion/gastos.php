@@ -3,47 +3,43 @@
  * roles/atencion/gastos.php — Registro de gastos del día (Atención)
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 
-$restauranteId = $_SESSION['restaurante_id'];
-$usuarioId     = $_SESSION['usuario_id'];
+require_once __DIR__ . '/../../config/finanzas.php';
+require_once __DIR__ . '/../../includes/reportes_financieros.php';
+require_once __DIR__ . '/../../includes/gastos_financieros.php';
+
+$restauranteId = (int)$_SESSION['restaurante_id'];
+$usuarioId = (int)$_SESSION['usuario_id'];
 $db = getDB();
 $hoy = date('Y-m-d');
-
 $mensaje = '';
+$tipo_mensaje = 'exito';
 
-// Procesar formulario de registro
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'registrar') {
-    $categoria   = trim($_POST['categoria'] ?? '');
-    $descripcion = trim($_POST['descripcion'] ?? '');
-    $monto       = floatval($_POST['monto'] ?? 0);
-
-    if ($categoria && $descripcion && $monto > 0) {
-        $stIn = $db->prepare("INSERT INTO gastos (restaurante_id, usuario_id, categoria, descripcion, monto, fecha) VALUES (?, ?, ?, ?, ?, ?)");
-        if ($stIn->execute([$restauranteId, $usuarioId, $categoria, $descripcion, $monto, $hoy])) {
-            $mensaje = "<div class='toast exito'><i class='fa-solid fa-circle-check'></i> Gasto registrado correctamente.</div>";
-        } else {
-            $mensaje = "<div class='toast error'><i class='fa-solid fa-circle-xmark'></i> Error al registrar gasto.</div>";
-        }
-    } else {
-        $mensaje = "<div class='toast advertencia'><i class='fa-solid fa-triangle-exclamation'></i> Completa todos los campos correctamente.</div>";
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
+    try {
+        $mensaje = guardar_gasto($db, $restauranteId, $usuarioId, $_SESSION['rol'], $_POST, $hoy);
+    } catch (DomainException $error) {
+        $mensaje = $error->getMessage();
+        $tipo_mensaje = 'error';
+    } catch (Throwable $error) {
+        error_log('No se guardó el gasto (' . get_class($error) . ':' . $error->getCode() . ').');
+        $mensaje = 'No se pudo guardar el gasto. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
     }
 }
 
-// Obtener gastos de HOY registrados por los usuarios de atención
 $stGastos = $db->prepare("
-    SELECT g.*, u.nombre AS usuario_nombre 
+    SELECT g.*, u.nombre AS usuario_nombre
     FROM gastos g
     LEFT JOIN usuarios u ON u.id = g.usuario_id
-    WHERE g.restaurante_id = ? AND g.fecha = ?
+    WHERE g.restaurante_id = ? AND g.fecha = ? AND g.activo = 1
     ORDER BY g.created_at DESC
 ");
 $stGastos->execute([$restauranteId, $hoy]);
 $gastos = $stGastos->fetchAll();
-
-$totalDia = array_sum(array_column($gastos, 'monto'));
+$totalDia = array_sum(array_map('centimos_reporte', array_column($gastos, 'monto'))) / 100;
 
 $pageTitle  = 'Gastos del Día';
 $activeMenu = 'gastos';
@@ -51,12 +47,14 @@ require_once '../../includes/header.php';
 ?>
 
 <div class="page-content">
-    <?= $mensaje ?>
+    <?php if ($mensaje !== ''): ?>
+        <div class="toast <?= $tipo_mensaje ?>" role="status"><?= htmlspecialchars($mensaje, ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
 
     <div class="d-flex align-center justify-between mb-24">
         <div>
             <h1><i class="fa-solid fa-money-bill-wave" style="font-size:1rem;margin-right:6px;color:var(--primary);"></i> Gastos del Día</h1>
-            <p>Registra los gastos menores realizados hoy (<?= date('d/m/Y') ?>)</p>
+            <p>Fecha contable de hoy (<?= date('d/m/Y') ?>). Los gastos nuevos se vinculan al turno abierto.</p>
         </div>
         <button class="btn btn-primario" onclick="Modal.abrir('modal-gasto')">
             <i class="fa-solid fa-plus"></i> Registrar Gasto
@@ -85,7 +83,7 @@ require_once '../../includes/header.php';
             <table>
                 <thead>
                     <tr>
-                        <th>Hora</th>
+                        <th>Fecha y hora de registro</th>
                         <th>Categoría</th>
                         <th>Descripción</th>
                         <th>Registrado por</th>
@@ -95,10 +93,10 @@ require_once '../../includes/header.php';
                 <tbody>
                     <?php foreach ($gastos as $g): ?>
                     <tr>
-                        <td><?= date('H:i', strtotime($g['created_at'])) ?></td>
+                        <td><?= date('d/m/Y H:i', strtotime($g['created_at'])) ?></td>
                         <td><span class="badge badge-gris"><?= htmlspecialchars($g['categoria']) ?></span></td>
                         <td><?= htmlspecialchars($g['descripcion']) ?></td>
-                        <td><?= htmlspecialchars($g['usuario_nombre']) ?></td>
+                        <td><?= htmlspecialchars($g['usuario_nombre'] ?? 'Usuario no disponible') ?></td>
                         <td class="text-right fw-700" style="color: var(--danger);">S/ <?= number_format($g['monto'], 2) ?></td>
                     </tr>
                     <?php endforeach; ?>
@@ -119,10 +117,11 @@ require_once '../../includes/header.php';
     <div class="modal">
         <div class="modal-header">
             <div class="modal-title"><i class="fa-solid fa-plus"></i> Registrar Gasto</div>
-            <button class="modal-close" onclick="Modal.cerrar('modal-gasto')"><i class="fa-solid fa-xmark"></i></button>
+            <button class="modal-close" style="min-width:44px;min-height:44px;" onclick="Modal.cerrar('modal-gasto')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <form method="POST">
             <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?? '' ?>">
+            <?= campos_contexto_restaurante() ?>
             <input type="hidden" name="accion" value="registrar">
             <div class="modal-body">
                 <div class="form-group">
@@ -143,7 +142,7 @@ require_once '../../includes/header.php';
                 </div>
                 <div class="form-group">
                     <label class="form-label">Monto (S/)</label>
-                    <input type="number" name="monto" class="form-control" step="0.01" min="0.10" placeholder="0.00" required>
+                    <input type="number" name="monto" class="form-control" step="0.01" min="0.01" max="99999999.99" placeholder="0.00" required>
                 </div>
             </div>
             <div class="modal-footer">

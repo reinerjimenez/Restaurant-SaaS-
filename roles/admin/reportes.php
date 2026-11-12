@@ -3,61 +3,25 @@
  * roles/admin/reportes.php — Reportes de ventas
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 
 $restauranteId = $_SESSION['restaurante_id'];
 $db = getDB();
 
-$fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
-$fechaFin    = $_GET['fecha_fin']    ?? date('Y-m-d');
+require_once __DIR__ . '/../../includes/reportes_financieros.php';
 
-$stDias = $db->prepare("
-    SELECT DATE(created_at) AS fecha,
-           COUNT(*) AS pedidos,
-           SUM(total) AS total
-    FROM pedidos
-    WHERE restaurante_id = ? AND estado = 'cobrado'
-      AND DATE(created_at) BETWEEN ? AND ?
-    GROUP BY DATE(created_at)
-    ORDER BY fecha DESC
-");
-$stDias->execute([$restauranteId, $fechaInicio, $fechaFin]);
-$ventasDia = $stDias->fetchAll();
+$fechaInicio = fecha_reporte($_GET['fecha_inicio'] ?? null, date('Y-m-01'));
+$fechaFin = fecha_reporte($_GET['fecha_fin'] ?? null, date('Y-m-d'));
+$fin_exclusivo = limite_exclusivo_reporte($fechaFin);
 
-$stProds = $db->prepare("
-    SELECT pr.nombre, SUM(pi.cantidad) AS vendidos, SUM(pi.subtotal) AS ingreso
-    FROM pedido_items pi
-    JOIN pedidos pe ON pe.id = pi.pedido_id
-    JOIN productos pr ON pr.id = pi.producto_id
-    WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado'
-      AND DATE(pe.created_at) BETWEEN ? AND ?
-    GROUP BY pr.id, pr.nombre
-    ORDER BY vendidos DESC
-    LIMIT 20
-");
-$stProds->execute([$restauranteId, $fechaInicio, $fechaFin]);
-$ventasProds = $stProds->fetchAll();
-
-$stMetodos = $db->prepare("
-    SELECT pa.metodo, SUM(pa.monto) AS total, COUNT(*) AS veces
-    FROM pagos pa
-    JOIN pedidos pe ON pe.id = pa.pedido_id
-    WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado' AND pa.anulado = 0 AND DATE(pa.created_at) BETWEEN ? AND ?
-    GROUP BY pa.metodo
-");
-$stMetodos->execute([$restauranteId, $fechaInicio, $fechaFin]);
-$ventasMetodos = $stMetodos->fetchAll();
-
-$totalGeneral = array_sum(array_column($ventasDia, 'total'));
-
-// Obtener gastos del periodo
-$stGastosRep = $db->prepare("SELECT COALESCE(SUM(monto), 0) FROM gastos WHERE restaurante_id = ? AND fecha BETWEEN ? AND ? AND activo = 1");
-$stGastosRep->execute([$restauranteId, $fechaInicio, $fechaFin]);
-$totalGastos = $stGastosRep->fetchColumn();
-
-$utilidadNeta = $totalGeneral - $totalGastos;
+$periodo = ingresos_periodo($db, $restauranteId, $fechaInicio, $fin_exclusivo);
+$ventasDia = array_reverse($periodo['dias']);
+$ventasMetodos = $periodo['metodos'];
+$ventasProds = productos_periodo($db, $restauranteId, $fechaInicio, $fin_exclusivo, 20);
+$totalGeneral = $periodo['total_centimos'] / 100;
+$totalGastos = gastos_contables_periodo($db, $restauranteId, $fechaInicio, $fin_exclusivo);
+$utilidadNeta = ($periodo['total_centimos'] - centimos_reporte($totalGastos)) / 100;
 
 $pageTitle  = 'Reportes';
 $activeMenu = 'reportes';
@@ -98,12 +62,12 @@ require_once '../../includes/header.php';
                 <div class="stat-card verde">
                     <div class="stat-icon"><i class="fa-solid fa-sack-dollar"></i></div>
                     <div class="stat-valor">S/ <?= number_format($totalGeneral, 2) ?></div>
-                    <div class="stat-label">Ingresos Brutos</div>
+                    <div class="stat-label">Cobros vigentes</div>
                 </div>
                 <div class="stat-card rojo">
                     <div class="stat-icon"><i class="fa-solid fa-money-bill-transfer"></i></div>
                     <div class="stat-valor">S/ <?= number_format($totalGastos, 2) ?></div>
-                    <div class="stat-label">Gastos Operativos</div>
+                    <div class="stat-label">Gastos por fecha contable</div>
                 </div>
                 <div class="stat-card azul" style="background: var(--primary-light); border-color: var(--primary);">
                     <div class="stat-icon" style="color: var(--primary);"><i class="fa-solid fa-piggy-bank"></i></div>
@@ -169,7 +133,7 @@ require_once '../../includes/header.php';
                     <?php if ($ventasProds): ?>
                     <div class="table-wrap">
                         <table>
-                            <thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Ingreso</th></tr></thead>
+                            <thead><tr><th>#</th><th>Producto</th><th>Cant.</th><th>Subtotal sin ajustes</th></tr></thead>
                             <tbody>
                                 <?php foreach ($ventasProds as $i => $p): ?>
                                 <tr>

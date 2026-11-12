@@ -3,8 +3,8 @@
  * api/superadmin_restaurantes.php — CRUD de restaurantes (solo superadmin)
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
-require_once '../config/db.php';
+require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/credenciales.php';
 requireRole(['superadmin']);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
@@ -52,11 +52,12 @@ switch ($accion) {
         $restId   = (int)($input['restaurante_id'] ?? 0);
         $nombre   = trim($input['nombre']   ?? '');
         $email    = trim($input['email']    ?? '');
-        $password = trim($input['password'] ?? '');
+        $password = $input['password'] ?? '';
 
-        if (!$restId || empty($nombre) || empty($email) || strlen($password) < 6) {
-            jsonResponse(false, null, 'Datos incompletos o contraseña muy corta');
+        if (!$restId || empty($nombre) || empty($email)) {
+            jsonResponse(false, null, 'Completa los datos del administrador.');
         }
+        if ($error_password = error_contrasena($password)) jsonResponse(false, null, $error_password);
 
         // Verificar restaurante existe
         $stRest = $db->prepare("SELECT id FROM restaurantes WHERE id = ?");

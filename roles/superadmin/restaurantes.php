@@ -3,8 +3,7 @@
  * roles/superadmin/restaurantes.php — Gestión multi-tenant de restaurantes
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
-require_once '../../config/db.php';
+require_once __DIR__ . '/../../config/db.php';
 requireRole(['superadmin']);
 
 $db = getDB();
@@ -164,7 +163,7 @@ require_once '../../includes/header.php';
                 </div>
                 <div class="form-group">
                     <label class="form-label">Contraseña inicial</label>
-                    <input type="password" id="admin-password" class="form-control" placeholder="Mín. 6 caracteres" required autocomplete="new-password">
+                    <input type="password" id="admin-password" class="form-control" placeholder="Mín. 12 caracteres" required autocomplete="new-password">
                 </div>
             </form>
         </div>
@@ -237,7 +236,7 @@ async function guardarAdminRest() {
         email:          document.getElementById('admin-email').value,
         password:       document.getElementById('admin-password').value,
     };
-    if (datos.password.length < 6) { Toast.advertencia('La contraseña debe tener al menos 6 caracteres'); btn.disabled = false; return; }
+    if (Array.from(datos.password).length < 12) { Toast.advertencia('La contraseña debe tener al menos 12 caracteres'); btn.disabled = false; return; }
     try {
         const res  = await fetch(BASE_URL + '/api/superadmin_restaurantes.php', {
             method: 'POST',

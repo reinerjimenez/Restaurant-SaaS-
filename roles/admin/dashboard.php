@@ -3,30 +3,21 @@
  * roles/admin/dashboard.php — Panel del Administrador
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
+
+require_once __DIR__ . '/../../includes/reportes_financieros.php';
 
 $restauranteId = $_SESSION['restaurante_id'];
 $db = getDB();
 
 // ── Métricas del día ─────────────────────────────────────────
 $hoy = date('Y-m-d');
-
-$stVentas = $db->prepare("
-    SELECT COALESCE(SUM(pa.monto), 0) AS total_dia, COUNT(DISTINCT pe.id) AS pedidos_dia
-    FROM pagos pa
-    JOIN pedidos pe ON pe.id = pa.pedido_id
-    WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado' AND pa.anulado = 0 AND DATE(pa.created_at) = ?
-");
-$stVentas->execute([$restauranteId, $hoy]);
-$ventas = $stVentas->fetch();
-
-$stGastosDia = $db->prepare("SELECT COALESCE(SUM(monto), 0) FROM gastos WHERE restaurante_id = ? AND fecha = ? AND activo = 1");
-$stGastosDia->execute([$restauranteId, $hoy]);
-$gastosDia = $stGastosDia->fetchColumn();
-
-$utilidadDia = $ventas['total_dia'] - $gastosDia;
+$fin_exclusivo = limite_exclusivo_reporte($hoy);
+$periodo = ingresos_periodo($db, $restauranteId, $hoy, $fin_exclusivo);
+$ventas = ['total_dia' => $periodo['total_centimos'] / 100, 'pedidos_dia' => $periodo['pedidos']];
+$gastosDia = gastos_contables_periodo($db, $restauranteId, $hoy, $fin_exclusivo);
+$utilidadDia = ($periodo['total_centimos'] - centimos_reporte($gastosDia)) / 100;
 
 $stMesas = $db->prepare("SELECT COUNT(*) AS ocupadas FROM mesas m WHERE m.restaurante_id = ? AND m.activo = 1 AND (m.estado = 'ocupada' OR EXISTS (SELECT 1 FROM pedidos p WHERE p.mesa_id = m.id AND p.estado = 'activo'))");
 $stMesas->execute([$restauranteId]);
@@ -40,47 +31,9 @@ $stActivos = $db->prepare("SELECT COUNT(*) FROM pedidos WHERE restaurante_id = ?
 $stActivos->execute([$restauranteId]);
 $pedidosActivos = $stActivos->fetchColumn();
 
-$stMetodos = $db->prepare("
-    SELECT pa.metodo, COALESCE(SUM(pa.monto),0) AS total
-    FROM pagos pa
-    JOIN pedidos pe ON pe.id = pa.pedido_id
-    WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado' AND pa.anulado = 0 AND DATE(pa.created_at) = ?
-    GROUP BY pa.metodo
-");
-$stMetodos->execute([$restauranteId, $hoy]);
-$metodos = $stMetodos->fetchAll();
-$metodoMap = array_column($metodos, 'total', 'metodo');
-
-$stTop = $db->prepare("
-    SELECT pr.nombre, SUM(pi.cantidad) AS vendidos, SUM(pi.subtotal) AS ingreso
-    FROM pedido_items pi
-    JOIN pedidos pe ON pe.id = pi.pedido_id
-    JOIN productos pr ON pr.id = pi.producto_id
-    WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado'
-      AND EXISTS (
-          SELECT 1 FROM pagos pa
-          WHERE pa.pedido_id = pe.id AND pa.anulado = 0 AND DATE(pa.created_at) = ?
-      )
-    GROUP BY pr.id, pr.nombre
-    ORDER BY vendidos DESC
-    LIMIT 5
-");
-$stTop->execute([$restauranteId, $hoy]);
-$topProductos = $stTop->fetchAll();
-
-$stUltimos = $db->prepare("
-    SELECT pe.id, pe.tipo, pe.total, pe.created_at,
-           m.numero AS mesa_numero,
-           u.nombre AS cajero
-    FROM pedidos pe
-    LEFT JOIN mesas m ON m.id = pe.mesa_id
-    JOIN usuarios u ON u.id = pe.usuario_id
-    WHERE pe.restaurante_id = ? AND pe.estado = 'cobrado'
-    ORDER BY pe.updated_at DESC
-    LIMIT 8
-");
-$stUltimos->execute([$restauranteId]);
-$ultimosPedidos = $stUltimos->fetchAll();
+$metodoMap = array_column($periodo['metodos'], 'total', 'metodo');
+$topProductos = productos_periodo($db, $restauranteId, $hoy, $fin_exclusivo, 5);
+$ultimosPedidos = cobros_periodo($db, $restauranteId, $hoy, $fin_exclusivo, '', 0, 8);
 
 $stRest = $db->prepare("
     SELECT r.nombre,
@@ -306,7 +259,7 @@ require_once '../../includes/header.php';
                                 <div style="font-size:.82rem;font-weight:600;color:var(--text-primary);">
                                     <?= $p['mesa_numero'] ? 'Mesa '.$p['mesa_numero'] : 'Para Llevar' ?>
                                 </div>
-                                <div style="font-size:.7rem;color:var(--text-secondary);"><?= htmlspecialchars($p['cajero']) ?> · <?= date('H:i', strtotime($p['created_at'])) ?></div>
+                                <div style="font-size:.7rem;color:var(--text-secondary);"><?= htmlspecialchars($p['cajero']) ?> · <?= date('H:i', strtotime($p['cobrado_en'])) ?></div>
                             </div>
                             <div style="font-weight:700;font-size:.88rem;color:var(--success);">S/ <?= number_format($p['total'],2) ?></div>
                         </div>

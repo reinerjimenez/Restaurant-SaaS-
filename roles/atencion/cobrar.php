@@ -3,9 +3,9 @@
  * roles/atencion/cobrar.php — Flujo de cobro con opción de comprobante
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
+require_once '../../config/finanzas.php';
 
 $restauranteId = $_SESSION['restaurante_id'];
 $pedidoId = (int)($_GET['pedido_id'] ?? 0);
@@ -24,22 +24,11 @@ $stPed->execute([$pedidoId, $restauranteId]);
 $pedido = $stPed->fetch();
 if (!$pedido) { header('Location: dashboard.php'); exit; }
 
-$stItems = $db->prepare("
-    SELECT pi.*, pr.nombre AS producto_nombre,
-           GROUP_CONCAT(ov.valor SEPARATOR ' · ') AS opciones_texto
-    FROM pedido_items pi
-    JOIN productos pr ON pr.id = pi.producto_id
-    LEFT JOIN pedido_item_opciones pio ON pio.item_id = pi.id
-    LEFT JOIN opciones_valor ov ON ov.id = pio.valor_id
-    WHERE pi.pedido_id = ?
-    GROUP BY pi.id
-    ORDER BY pi.created_at ASC
-");
-$stItems->execute([$pedidoId]);
-$items = $stItems->fetchAll();
+$items = items_comprobante($db, $pedidoId);
+$subtotal_centimos = array_sum(array_map(static fn(array $item): int => importe_centimos($item['subtotal']), $items));
 
 $mesaLabel = $pedido['mesa_numero'] ? 'Mesa '.$pedido['mesa_numero'] : 'Para llevar';
-$total     = $pedido['total'];
+$total = decimal_centimos($subtotal_centimos);
 
 $pageTitle = "Cobrar · $mesaLabel";
 require_once '../../includes/header.php';
@@ -187,11 +176,13 @@ require_once '../../includes/header.php';
         <div style="display:flex; gap:12px; margin-bottom:12px;">
             <div style="flex:1;">
                 <label class="form-label" style="font-size:.85rem;color:var(--text-secondary);">Descuento (S/)</label>
-                <input type="number" id="input-descuento" class="form-control" step="0.10" min="0" placeholder="0.00" oninput="calcularDiferencia()">
+                <input type="number" id="input-descuento" class="form-control" step="0.01" min="0" placeholder="0.00"
+                       value="<?= htmlspecialchars((string)($pedido['descuento'] ?? '0.00')) ?>" oninput="calcularDiferencia()">
             </div>
             <div style="flex:1;">
                 <label class="form-label" style="font-size:.85rem;color:var(--text-secondary);">Cargo extra (S/)</label>
-                <input type="number" id="input-cargo" class="form-control" step="0.10" min="0" placeholder="0.00" oninput="calcularDiferencia()">
+                <input type="number" id="input-cargo" class="form-control" step="0.01" min="0" placeholder="0.00"
+                       value="<?= htmlspecialchars((string)($pedido['cargo_extra'] ?? '0.00')) ?>" oninput="calcularDiferencia()">
             </div>
         </div>
         <div class="card-title" style="margin-top:16px;"><i class="fa-solid fa-note-sticky"></i> Motivo / Notas del cobro (opcional)</div>
@@ -248,7 +239,7 @@ require_once '../../includes/header.php';
 </div>
 
 <script>
-const TOTAL_PEDIDO = <?= $total ?>;
+const SUBTOTAL_CENTIMOS = <?= $subtotal_centimos ?>;
 const PEDIDO_ID    = <?= $pedidoId ?>;
 const METODOS      = ['efectivo','yape','transferencia','tarjeta','otro'];
 const activos      = new Set();
@@ -380,36 +371,49 @@ function toggleMetodo(key) {
         activos.add(key);
         el.classList.add('activo');
         if (activos.size === 1) {
-            document.getElementById(`monto-${key}`).value = obtenerTotalFinal().toFixed(2);
+            const total = obtenerTotalFinal();
+            if (total !== null) document.getElementById(`monto-${key}`).value = soles(total);
         }
     }
     calcularDiferencia();
 }
 
+function centimosCobro(valor) {
+    if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(valor)) return null;
+    const [entero, fraccion = ''] = valor.split('.');
+    return Number(entero) * 100 + Number(fraccion.padEnd(2, '0'));
+}
+
+function soles(centimos) {
+    return (centimos / 100).toFixed(2);
+}
+
 function obtenerTotalFinal() {
-    const descuento = parseFloat(document.getElementById('input-descuento')?.value || 0);
-    const cargo = parseFloat(document.getElementById('input-cargo')?.value || 0);
-    return Math.max(0, TOTAL_PEDIDO + cargo - descuento);
+    const descuento = centimosCobro(document.getElementById('input-descuento').value || '0');
+    const cargo = centimosCobro(document.getElementById('input-cargo').value || '0');
+    if (descuento === null || cargo === null || SUBTOTAL_CENTIMOS <= 0) return null;
+    const total = SUBTOTAL_CENTIMOS + cargo - descuento;
+    return total > 0 && total <= 9999999999 ? total : null;
 }
 
 function calcularDiferencia() {
     const totalFinal = obtenerTotalFinal();
     let asignado = 0;
     activos.forEach(key => {
-        asignado += parseFloat(document.getElementById(`monto-${key}`).value || 0);
+        asignado += centimosCobro(document.getElementById(`monto-${key}`).value || '0') ?? 0;
     });
-    const diferencia = totalFinal - asignado;
+    const diferencia = totalFinal === null ? null : totalFinal - asignado;
     
-    document.getElementById('total-pedido-display').textContent = `S/ ${totalFinal.toFixed(2)}`;
-    document.getElementById('total-asignado').textContent = `S/ ${asignado.toFixed(2)}`;
-    document.getElementById('diferencia-val').textContent  = `S/ ${Math.abs(diferencia).toFixed(2)}`;
+    document.getElementById('total-pedido-display').textContent = totalFinal === null ? '—' : `S/ ${soles(totalFinal)}`;
+    document.getElementById('total-asignado').textContent = `S/ ${soles(asignado)}`;
+    document.getElementById('diferencia-val').textContent = diferencia === null ? '—' : `S/ ${soles(Math.abs(diferencia))}`;
 
     const aviso = document.getElementById('aviso-diferencia');
-    if (Math.abs(diferencia) > 0.10) {
+    if (diferencia !== 0) {
         aviso.classList.add('show');
-        aviso.innerHTML = diferencia > 0
-            ? `<i class="fa-solid fa-triangle-exclamation"></i> Faltan S/ ${diferencia.toFixed(2)} por asignar`
-            : `<i class="fa-solid fa-circle-info"></i> Hay S/ ${Math.abs(diferencia).toFixed(2)} de vuelto/propina`;
+        aviso.textContent = diferencia === null ? 'Revisa el subtotal, descuento y cargo adicional.'
+            : diferencia > 0 ? `Faltan S/ ${soles(diferencia)} por asignar`
+                : `Los pagos exceden el total en S/ ${soles(-diferencia)}`;
     } else {
         aviso.classList.remove('show');
     }
@@ -417,25 +421,30 @@ function calcularDiferencia() {
 
 // ── Confirmar cobro ──────────────────────────────────────────
 async function confirmarCobro() {
+    const btn = document.getElementById('btn-confirmar-cobro');
+    if (btn.disabled) return;
     if (activos.size === 0) { Toast.advertencia('Selecciona al menos un método de pago'); return; }
 
     // Armar array de pagos
     const pagos = [];
+    let totalPagado = 0;
     for (const key of activos) {
-        const monto = parseFloat(document.getElementById(`monto-${key}`).value || 0);
-        if (monto <= 0) { Toast.advertencia(`Ingresa el monto para: ${key}`); return; }
-        const pago = { metodo: key, monto };
+        const monto = centimosCobro(document.getElementById(`monto-${key}`).value);
+        if (monto === null || monto <= 0) { Toast.advertencia(`Ingresa un monto positivo de hasta dos decimales para: ${key}`); return; }
+        const pago = { metodo: key, monto: soles(monto) };
+        totalPagado += monto;
         const refEl = document.getElementById(`ref-${key}`);
         if (refEl) pago.referencia = refEl.value.trim();
         pagos.push(pago);
     }
 
     const totalFinal = obtenerTotalFinal();
-    const diferencia = totalFinal - pagos.reduce((s, p) => s + p.monto, 0);
-    if (Math.abs(diferencia) > 0.10) {
-        const ok = confirm(`Hay una diferencia de S/ ${Math.abs(diferencia).toFixed(2)}. ¿Confirmar de todas formas?`);
-        if (!ok) return;
+    if (totalFinal === null || totalPagado !== totalFinal) {
+        Toast.advertencia('Revisa los ajustes y asigna el importe exacto del pedido.');
+        return;
     }
+    const descuento = document.getElementById('input-descuento').value || '0';
+    const cargo_extra = document.getElementById('input-cargo').value || '0';
 
     // Validar datos de comprobante si aplica
     let clienteData = null;
@@ -473,7 +482,6 @@ async function confirmarCobro() {
         }
     }
 
-    const btn = document.getElementById('btn-confirmar-cobro');
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
 
@@ -487,8 +495,8 @@ async function confirmarCobro() {
                 tipo:      tipoComp,
                 pagos,
                 notas: document.getElementById('notas-cobro').value,
-                descuento: parseFloat(document.getElementById('input-descuento')?.value || 0),
-                cargo_extra: parseFloat(document.getElementById('input-cargo')?.value || 0),
+                descuento,
+                cargo_extra,
                 ...clienteData,
             };
 
@@ -523,8 +531,8 @@ async function confirmarCobro() {
                     pedido_id: PEDIDO_ID, 
                     pagos, 
                     notas: document.getElementById('notas-cobro').value,
-                    descuento: parseFloat(document.getElementById('input-descuento')?.value || 0),
-                    cargo_extra: parseFloat(document.getElementById('input-cargo')?.value || 0)
+                    descuento,
+                    cargo_extra
                 })
             });
             const json = await res.json();
@@ -543,6 +551,7 @@ async function confirmarCobro() {
         btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Confirmar cobro';
     }
 }
+calcularDiferencia();
 </script>
 
 <?php require_once '../../includes/footer.php'; ?>

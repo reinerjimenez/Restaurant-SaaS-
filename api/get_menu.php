@@ -3,7 +3,6 @@
  * api/get_menu.php — Devuelve categorías y productos activos del restaurante
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 

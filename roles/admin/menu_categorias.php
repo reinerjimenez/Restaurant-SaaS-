@@ -3,7 +3,6 @@
  * roles/admin/menu_categorias.php — Gestión de categorías del menú
  * Sistema SaaS Restaurante | R.DEV
  */
-session_start();
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
 
