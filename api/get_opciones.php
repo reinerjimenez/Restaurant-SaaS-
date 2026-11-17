@@ -1,7 +1,7 @@
 <?php
 /**
  * api/get_opciones.php — Grupos de opciones de un producto
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);

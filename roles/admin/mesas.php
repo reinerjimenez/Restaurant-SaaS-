@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/admin/mesas.php — Gestión de mesas + mapa interactivo
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);

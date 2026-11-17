@@ -588,15 +588,15 @@
     "semantic_hash": ""
   },
   "scripts/ensayo/diagnostico_mariadb.php": {
-    "mtime": 1794430831.3452327,
-    "seen": 1794430990.7587435,
-    "ast_hash": "8b464d547da5502b3903e57994e3a603",
+    "mtime": 1794444238.4527116,
+    "seen": 1794445731.9654038,
+    "ast_hash": "84b2e1fbbf340607e2a624f021c2de5a",
     "semantic_hash": ""
   },
   "scripts/ensayo/verificar_entorno.php": {
-    "mtime": 1794431378.546787,
-    "seen": 1794431860.6517458,
-    "ast_hash": "502cc8abe3a9f9b387f69dbf8faab3e9",
+    "mtime": 1794444227.946511,
+    "seen": 1794445731.9685764,
+    "ast_hash": "ec440ff00d72b3f2effea3f3279d199b",
     "semantic_hash": ""
   },
   "docs/auditoria/13_validacion_migraciones_ola1.md": {
@@ -612,9 +612,9 @@
     "semantic_hash": ""
   },
   "docs/auditoria/15_respaldo_restauracion_ola1.md": {
-    "mtime": 1794442881.31574,
-    "seen": 1794442906.2236824,
-    "ast_hash": "504fadded894a67061ac1299381ec396",
+    "mtime": 1794442964.2115304,
+    "seen": 1794445731.9863744,
+    "ast_hash": "d4904474bcc353d4b8e812e4790277d2",
     "semantic_hash": ""
   },
   "docs/auditoria/16_dictamen_final_ola1.md": {
@@ -648,9 +648,9 @@
     "semantic_hash": ""
   },
   "scripts/ensayo/aprovisionar_bases.php": {
-    "mtime": 1794431379.0736978,
-    "seen": 1794431860.6510015,
-    "ast_hash": "d0c01562c59e457634e383bcc24567f1",
+    "mtime": 1794444245.2637112,
+    "seen": 1794445731.9653945,
+    "ast_hash": "341a1a808c8e33bc9e31778fbb050032",
     "semantic_hash": ""
   },
   "scripts/ensayo/escanear_secretos.py": {
@@ -690,15 +690,15 @@
     "semantic_hash": ""
   },
   "scripts/ensayo/perfil_privilegios.php": {
-    "mtime": 1794431392.1886442,
-    "seen": 1794431860.651374,
-    "ast_hash": "9d2c72a63fc9b82d2d1c0d22cafed70a",
+    "mtime": 1794444872.6594977,
+    "seen": 1794445731.9670918,
+    "ast_hash": "c2fc37cbb14b95841ea7565e43c0b0a9",
     "semantic_hash": ""
   },
   "scripts/ensayo/reservar_respaldo.py": {
-    "mtime": 1794442869.9645188,
-    "seen": 1794442906.2087197,
-    "ast_hash": "5e8a9ff18d25d24d3b2850c95f55d1d1",
+    "mtime": 1794444064.8066766,
+    "seen": 1794445731.967099,
+    "ast_hash": "321066e76a106975a081e49e601adf3c",
     "semantic_hash": ""
   },
   "scripts/ensayo/validar_consulta.php": {
@@ -708,9 +708,9 @@
     "semantic_hash": ""
   },
   "scripts/ensayo/validar_respaldo.py": {
-    "mtime": 1794442866.3655307,
-    "seen": 1794442906.2100668,
-    "ast_hash": "4f6338e0d0204dfad8088e9f199fe798",
+    "mtime": 1794445770.0058203,
+    "seen": 1794445999.4511492,
+    "ast_hash": "2807deaf84c78d36d89bc96e7c251fd4",
     "semantic_hash": ""
   },
   "scripts/ensayo/verificar_privilegios.php": {
@@ -720,15 +720,15 @@
     "semantic_hash": ""
   },
   "tests/infrastructure/test_paquete.py": {
-    "mtime": 1794442848.8337796,
-    "seen": 1794442906.2129152,
-    "ast_hash": "51b1fe3f593974e482a0f953678a873b",
+    "mtime": 1794445784.8103895,
+    "seen": 1794445999.4548752,
+    "ast_hash": "6955511215081d5dcc525d068999ac4d",
     "semantic_hash": ""
   },
   "tests/infrastructure/test_perfiles.php": {
-    "mtime": 1794431691.5398312,
-    "seen": 1794431860.6522589,
-    "ast_hash": "4fc2ca1d737b3ae2d958b3ce07e22d28",
+    "mtime": 1794444879.0207746,
+    "seen": 1794445731.970043,
+    "ast_hash": "a791c6c36bf2afca8421d091d92f1139",
     "semantic_hash": ""
   },
   "docs/auditoria/19_cierre_remediacion_paquete_ensayo.md": {
@@ -738,15 +738,21 @@
     "semantic_hash": ""
   },
   "scripts/ensayo/restaurar_respaldo.php": {
-    "mtime": 1794442927.794256,
-    "seen": 1794442945.8278418,
-    "ast_hash": "94ef14393099fa7c86bf8dddb2f912d8",
+    "mtime": 1794445658.9745352,
+    "seen": 1794445731.9671044,
+    "ast_hash": "386f605f0835ba5ed0156975d64e3834",
     "semantic_hash": ""
   },
   "docs/auditoria/20_validacion_respaldo_ola1.md": {
-    "mtime": 1794442886.330612,
-    "seen": 1794442906.225246,
-    "ast_hash": "730b9d580b7641abe1276452687df711",
+    "mtime": 1794442977.112069,
+    "seen": 1794445731.989275,
+    "ast_hash": "f4a97f40d0fe7bf88713364b209ddc2e",
+    "semantic_hash": ""
+  },
+  "scripts/ensayo/verificar_instancia_temporal.ps1": {
+    "mtime": 1794444390.397331,
+    "seen": 1794445731.9685824,
+    "ast_hash": "228bc3bc77e7aab3a3d8632638f33058",
     "semantic_hash": ""
   }
 }

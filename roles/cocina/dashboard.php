@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/cocina/dashboard.php — Vista de cocina en tiempo real
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['cocina', 'admin', 'encargado', 'superadmin']);

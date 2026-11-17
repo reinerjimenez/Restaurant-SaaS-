@@ -2,7 +2,7 @@
 /**
  * api/cancelar_pedido.php — Cancela un pedido activo y libera la mesa
  * Solo para admin/superadmin
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);

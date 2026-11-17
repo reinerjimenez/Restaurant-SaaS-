@@ -2,7 +2,7 @@
 /**
  * roles/atencion/comprobante_view.php
  * Vista de comprobante (boleta o factura) optimizada para impresión.
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
@@ -91,7 +91,7 @@ require_once '../../includes/header.php';
         </div>
         <?php else: ?>
         <div class="ticket-logo">
-            <img src="<?= BASE_URL ?>/assets/logo.png" alt="Logo" style="max-width:100px;max-height:52px;">
+            <img src="<?= BASE_URL ?>/assets/mesora.webp" alt="MESORA" style="max-width:100px;max-height:52px;">
         </div>
         <?php endif; ?>
 

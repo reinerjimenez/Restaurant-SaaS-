@@ -3,7 +3,7 @@
  * api/consultar_documento.php
  * Consulta DNI o RUC usando la API de apis.net.pe (solo desde PHP/cURL).
  * El token NUNCA llega al frontend.
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);

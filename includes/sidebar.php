@@ -1,7 +1,7 @@
 <?php
 /**
  * sidebar.php — Menú lateral dinámico y unificado del sistema
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 
 // Evitar acceso directo si no hay sesión activa

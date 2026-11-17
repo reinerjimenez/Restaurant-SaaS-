@@ -5,16 +5,44 @@
 
 Options -Indexes
 
+# Bloquear carpetas de desarrollo, auditoria y despliegue que no son runtime.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(?:\.git|docs|tests|scripts|database|graphify-out)(?:/|$) - [F,L,NC]
+    RewriteRule (?:^|/)[^/]+\.md$ - [F,L,NC]
+</IfModule>
+
+# Bloquear archivos ocultos de configuracion y control de versiones.
+<FilesMatch "^\.(env(?:\..*)?|gitignore|gitattributes|gitmodules)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule mod_access_compat.c>
+        Order Allow,Deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
 # Proteger carpeta config/ de acceso directo
 <FilesMatch "^(db\.php|config\.php|install\.sql)$">
-    Order Allow,Deny
-    Deny from all
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule mod_access_compat.c>
+        Order Allow,Deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
 
 # Proteger archivos sensibles
 <FilesMatch "\.(sql|ini|log|env)$">
-    Order Allow,Deny
-    Deny from all
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule mod_access_compat.c>
+        Order Allow,Deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
 
 # Headers de seguridad

@@ -2,7 +2,7 @@
 /**
  * api/get_pedidos_activos.php — Pedidos activos con items y opciones
  * Usado por: cocina (polling) y atención
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../config/db.php';
 requireRole(['cocina', 'atencion', 'admin', 'encargado', 'superadmin']);

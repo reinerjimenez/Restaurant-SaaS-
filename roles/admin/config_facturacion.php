@@ -2,7 +2,7 @@
 /**
  * roles/admin/config_facturacion.php
  * Configuración de identidad de marca y datos de facturación del restaurante.
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['admin', 'superadmin']);
@@ -178,7 +178,7 @@ require_once '../../includes/header.php';
                                 $logoActual = $cfg['logo'] ?? null;
                                 $logoDisplay = ($logoActual && file_exists($_SERVER['DOCUMENT_ROOT'] . $logoActual))
                                     ? htmlspecialchars($logoActual)
-                                    : BASE_URL . '/assets/logo.png';
+                                    : BASE_URL . '/assets/mesora.webp';
                                 ?>
                                 <div id="logo-preview-box" style="width:80px;height:80px;border-radius:var(--radius-md);border:2px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-secondary);">
                                     <img id="logo-preview" src="<?= $logoDisplay ?>" alt="Logo" style="max-width:100%;max-height:100%;object-fit:contain;">

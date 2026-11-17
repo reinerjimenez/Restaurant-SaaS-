@@ -1,7 +1,7 @@
 <?php
 /**
  * index.php — Página de login principal
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once __DIR__ . '/config/db.php';
 
@@ -27,8 +27,8 @@ unset($_SESSION['login_error']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Sistema SaaS de gestión para restaurantes — Ingresa a tu cuenta">
-    <title>Iniciar sesión — RestSaaS | R.DEV</title>
+    <meta name="description" content="MESORA — Sistema SaaS de gestión para restaurantes. Ingresa a tu cuenta.">
+    <title>Iniciar sesión | MESORA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -41,7 +41,7 @@ unset($_SESSION['login_error']);
     <!-- Mitad Izquierda: Branding & Mensaje -->
     <div class="split-left">
         <div class="split-left-content">
-            <img src="<?= BASE_URL ?>/assets/logo.png" alt="Sabor Perú Logo" class="split-logo">
+            <img src="<?= BASE_URL ?>/assets/mesora.webp" alt="MESORA" class="split-logo">
             <h1 class="split-headline">Gestión Inteligente y Moderna para tu Restaurante</h1>
             <p class="split-description">Optimiza tus operaciones, centraliza tus pedidos y acelera tus cobros en una plataforma diseñada para equipos de alto rendimiento.</p>
         </div>

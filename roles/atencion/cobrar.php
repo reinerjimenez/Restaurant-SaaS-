@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/atencion/cobrar.php — Flujo de cobro con opción de comprobante
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);

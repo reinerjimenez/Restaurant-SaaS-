@@ -73,13 +73,14 @@ function verificar_manifiesto_ensayo(string $ruta): array
         throw new RuntimeException('Falta el manifiesto privado de la VM.');
     }
     $manifiesto = json_decode((string)file_get_contents($ruta), true, 512, JSON_THROW_ON_ERROR);
-    foreach (['vm_uuid', 'hostname', 'os_caption', 'mariadb_pid', 'mariadb_exe', 'datadir', 'mariadb_version', 'mysql_ini', 'mysql_ini_sha256', 'apache_ini', 'apache_ini_sha256'] as $clave) {
+    foreach (['vm_uuid', 'hostname', 'os_caption', 'mariadb_pid', 'mariadb_exe', 'datadir', 'mariadb_version', 'mariadb_server_id', 'mysql_ini', 'mysql_ini_sha256', 'apache_ini', 'apache_ini_sha256'] as $clave) {
         if (empty($manifiesto[$clave])) {
             throw new RuntimeException('Manifiesto incompleto.');
         }
     }
     if (!preg_match('/^[0-9a-f-]{36}$/i', $manifiesto['vm_uuid']) ||
         !is_int($manifiesto['mariadb_pid']) || $manifiesto['mariadb_pid'] <= 0 ||
+        !is_int($manifiesto['mariadb_server_id']) || $manifiesto['mariadb_server_id'] < 0 ||
         !is_dir($manifiesto['datadir']) ||
         !is_file($manifiesto['mysql_ini']) || !is_file($manifiesto['apache_ini']) ||
         !hash_equals(strtolower($manifiesto['mysql_ini_sha256']), hash_file('sha256', $manifiesto['mysql_ini'])) ||

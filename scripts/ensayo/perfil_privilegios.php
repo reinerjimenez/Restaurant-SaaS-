@@ -14,8 +14,11 @@ function privilegios_validos(array $grants, string $base, array $permitidos): bo
         if ($partes[2] === '*.*' && strtoupper($partes[1]) === 'USAGE') {
             continue;
         }
-        $objetivo = '`' . str_replace('_', '\\_', $base) . '`.*';
-        if ($partes[2] !== $objetivo) {
+        $objetivos = [
+            '`' . $base . '`.*',
+            '`' . str_replace('_', '\\_', $base) . '`.*',
+        ];
+        if (!in_array($partes[2], $objetivos, true)) {
             return false;
         }
         foreach (explode(',', $partes[1]) as $privilegio) {

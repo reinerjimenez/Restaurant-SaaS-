@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/admin/auditoria.php — Registro de acciones relevantes del restaurante
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['admin', 'superadmin']);

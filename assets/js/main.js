@@ -1,6 +1,6 @@
 /**
  * main.js — Utilidades globales
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 
 /* ── TOAST NOTIFICATIONS ─────────────────────────────────────── */

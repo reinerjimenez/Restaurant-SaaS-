@@ -35,9 +35,9 @@ verificar_seguridad(sesion_expirada(array_replace($sesion, ['_actividad_sesion' 
 verificar_seguridad(sesion_expirada(array_replace($sesion, ['_inicio_sesion' => $ahora - SESION_DURACION]), $ahora), 'expiración absoluta aunque haya actividad');
 verificar_seguridad(sesion_expirada(['usuario_id' => 9], $ahora), 'sesión antigua requiere autenticación');
 verificar_seguridad(!sesion_expirada([], $ahora), 'visitante puede recibir un formulario');
-$cookie_https = parametros_cookie_sesion('/system-restaurant', ['HTTPS' => 'on']);
+$cookie_https = parametros_cookie_sesion('/MESORA', ['HTTPS' => 'on']);
 verificar_seguridad($cookie_https['secure'] && $cookie_https['httponly'] && $cookie_https['samesite'] === 'Lax'
-    && $cookie_https['path'] === '/system-restaurant/', 'configuración de cookie HTTPS');
+    && $cookie_https['path'] === '/MESORA/', 'configuración de cookie HTTPS');
 verificar_seguridad(!parametros_cookie_sesion('', ['HTTP_X_FORWARDED_PROTO' => 'https'])['secure'], 'solo configuración HTTPS confiable');
 
 $a = ['restaurante_id' => 4, '_contexto_restaurante' => 'generacion_a'];

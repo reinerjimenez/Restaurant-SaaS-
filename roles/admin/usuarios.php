@@ -1,7 +1,7 @@
 ﻿<?php
 /**
  * roles/admin/usuarios.php — Gestión de usuarios del restaurante
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once __DIR__ . '/../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);

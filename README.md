@@ -11,7 +11,7 @@
 ╚═╝  ╚═╝╚══════╝╚══════╝   ╚═╝      ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
 ```
 
-# 🍽️ RestSaaS — Sistema de Gestión para Restaurantes
+# 🍽️ MESORA — Sistema de Gestión para Restaurantes
 
 **Plataforma SaaS multi-tenant para la gestión integral de restaurantes modernos**  
 *Pedidos · Facturación · Cocina · Control de Caja · Reportes*
@@ -51,11 +51,11 @@
 
 ## 🚀 Visión General
 
-**RestSaaS** es una plataforma de gestión completa para restaurantes, construida sobre una arquitectura **SaaS multi-tenant**. Permite que múltiples restaurantes operen de forma independiente bajo una única instalación, con aislamiento de datos garantizado y gestión centralizada desde el **Superadmin**.
+**MESORA** es una plataforma de gestión completa para restaurantes, construida sobre una arquitectura **SaaS multi-tenant**. Permite que múltiples restaurantes operen de forma independiente bajo una única instalación, con aislamiento de datos garantizado y gestión centralizada desde el **Superadmin**.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    RESTSAAS PLATFORM                    │
+│                     MESORA PLATFORM                     │
 │                                                         │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
 │  │  Restaurante │  │  Restaurante │  │  Restaurante │  │
@@ -66,7 +66,7 @@
 │                           │                             │
 │              ┌────────────▼────────────┐                │
 │              │     Base de Datos       │                │
-│              │   MySQL (restaurante_db)│                │
+│              │      MariaDB (mesora)    │                │
 │              └─────────────────────────┘                │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -218,7 +218,7 @@ El sistema implementa un control de acceso basado en roles **(RBAC)** con 4 nive
 ## 🗂️ Estructura del Proyecto
 
 ```
-system-restaurant/
+MESORA/
 │
 ├── 📄 index.php                       ← Login principal (entry point)
 ├── 📄 .htaccess                       ← Seguridad Apache + cache
@@ -295,7 +295,7 @@ system-restaurant/
 │   └── 📄 footer.php                  ← Cierre de layout + JS
 │
 ├── 📁 assets/
-│   ├── 📄 logo.png
+│   ├── 📄 mesora.webp                   ← Logo oficial
 │   ├── 📄 timbre.mp3                  ← Alerta sonora (cocina)
 │   ├── 📁 css/
 │   │   ├── 📄 main.css                ← Design system (55KB)
@@ -304,8 +304,8 @@ system-restaurant/
 │       └── 📄 main.js                 ← Lógica JavaScript global
 │
 └── 📁 Database/
-    ├── 📄 restaurante_db.sql          ← Schema base de datos
-    └── 📄 produccion_database.sql     ← Dump completo de producción
+    ├── 📄 008_mesora_instalacion_oficial.sql  ← Instalación nueva
+    └── 📄 README.md                    ← Guía de scripts históricos
 ```
 
 ---
@@ -326,23 +326,23 @@ system-restaurant/
 
 ```bash
 # Clonar en la carpeta htdocs de XAMPP
-git clone https://github.com/reinerjimenez/Restaurant-SaaS- C:/xampp/htdocs/system-restaurant
+git clone https://github.com/reinerjimenez/Restaurant-SaaS- C:/xampp/htdocs/MESORA
 
 # O copiar la carpeta manualmente a:
-# C:\xampp\htdocs\system-restaurant\
+# C:\xampp\htdocs\MESORA\
 ```
 
 ### Paso 2 — Configurar la Base de Datos
 
 > ⚠️ **IMPORTANTE:** Nunca modificar la base de datos de forma directa.  
-> Siempre ejecutar los scripts `.sql` de la carpeta `Database/` en phpMyAdmin.
+> Para una instalación nueva, importar únicamente `Database/008_mesora_instalacion_oficial.sql` en una base vacía. No importar los scripts históricos ni las migraciones 001–007 después de este instalador.
 
 ```sql
 -- 1. Crear la base de datos
-CREATE DATABASE restaurante_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE mesora CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- 2. Abrir phpMyAdmin → seleccionar restaurante_db → Importar:
---    Database/restaurante_db.sql
+-- 2. Abrir phpMyAdmin → seleccionar mesora → Importar:
+--    Database/008_mesora_instalacion_oficial.sql
 ```
 
 ### Paso 3 — Configurar Variables de Entorno
@@ -352,7 +352,7 @@ Editar el archivo `.env` en la raíz del proyecto:
 ```env
 # ── Base de Datos ─────────────────────
 DB_HOST=localhost
-DB_NAME=restaurante_db
+DB_NAME=mesora
 DB_USER=root
 DB_PASS=
 
@@ -383,12 +383,12 @@ LoadModule deflate_module  modules/mod_deflate.so
 ### Paso 5 — Acceder al Sistema
 
 ```
-http://localhost/system-restaurant/
+http://localhost/MESORA/
 ```
 
 | Rol | Email | Contraseña |
 |:---|:---|:---|
-| Superadmin | `superadmin@restsaas.com` | Ver script SQL |
+| Superadmin | `admin@mesora.local` | Entregada por separado al operador |
 | Admin | Configurar desde panel superadmin | — |
 
 ---
@@ -398,7 +398,7 @@ http://localhost/system-restaurant/
 ### Tablas Principales
 
 ```
-restaurante_db
+mesora
 │
 ├── 🏪 restaurantes          ← Tenants (multi-restaurante)
 ├── 👤 usuarios              ← Usuarios con rol y tenant
@@ -769,6 +769,6 @@ Contacta al desarrollador a través de LinkedIn
 
 <br/>
 
-*RestSaaS — Gestión inteligente para restaurantes modernos* 🍽️
+*MESORA — Gestión inteligente para restaurantes modernos* 🍽️
 
 </div>

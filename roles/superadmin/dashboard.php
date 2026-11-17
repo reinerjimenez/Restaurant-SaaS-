@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/superadmin/dashboard.php — Panel global del desarrollador
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['superadmin']);

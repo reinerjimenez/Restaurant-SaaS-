@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/atencion/dashboard.php — Mapa de mesas (panel atención)
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);

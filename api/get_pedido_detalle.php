@@ -2,7 +2,7 @@
 /**
  * api/get_pedido_detalle.php — Detalle completo de un pedido
  * Usado por historial.php para el modal de detalle
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin', 'atencion']);

@@ -20,7 +20,7 @@ try {
     );
     unset($clave);
     $identidad = $pdo->query("SELECT VERSION() AS version, @@hostname AS host, @@port AS puerto,
-        @@datadir AS datadir, DATABASE() AS esquema, CURRENT_USER() AS cuenta,
+        @@datadir AS datadir, @@server_id AS server_id, DATABASE() AS esquema, CURRENT_USER() AS cuenta,
         @@character_set_database AS charset, @@collation_database AS collation")
         ->fetch(PDO::FETCH_ASSOC);
     $datos_servidor = realpath($identidad['datadir']);
@@ -28,6 +28,7 @@ try {
         strcasecmp($identidad['host'], $host) !== 0 || (int)$identidad['puerto'] !== 3306 ||
         $datos_servidor === false || strcasecmp($datos_servidor, $datos) !== 0 ||
         $identidad['esquema'] !== 'restaurant_ola1_test' ||
+        (int)$identidad['server_id'] !== $manifiesto['mariadb_server_id'] ||
         !in_array($identidad['cuenta'], ['ola1_app@localhost', 'ola1_app@127.0.0.1'], true)) {
         throw new RuntimeException('La identidad efectiva del servidor no coincide con el ensayo.');
     }

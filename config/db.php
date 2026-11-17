@@ -1,7 +1,7 @@
 <?php
 // ============================================
 // Conexión a la Base de Datos — PDO
-// Sistema SaaS Restaurante | R.DEV
+// MESORA | Sistema SaaS para restaurantes
 // ============================================
 
 /**
@@ -28,30 +28,38 @@ function loadEnv($path) {
     }
 }
 
+/** Lee configuración de $_ENV, $_SERVER o el entorno del proceso. */
+function envValue(string $name, ?string $default = null): ?string {
+    if (array_key_exists($name, $_ENV)) return (string)$_ENV[$name];
+    if (array_key_exists($name, $_SERVER)) return (string)$_SERVER[$name];
+    $value = getenv($name);
+    return $value === false ? $default : $value;
+}
+
 // Cargar variables de entorno
 loadEnv(__DIR__ . '/../.env');
 
 // Detectar automáticamente la URL base (configurable vía .env, o auto-detectar localhost vs producción)
-if (!empty($_ENV['BASE_URL'])) {
-    define('BASE_URL', rtrim($_ENV['BASE_URL'], '/'));
+if (!empty(envValue('BASE_URL'))) {
+    define('BASE_URL', rtrim(envValue('BASE_URL'), '/'));
 } else {
     $host = $_SERVER['HTTP_HOST'] ?? '';
     if (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false) {
-        define('BASE_URL', '/system-restaurant');
+        define('BASE_URL', '/MESORA');
     } else {
         define('BASE_URL', '');
     }
 }
 
-define('DB_HOST', $_ENV['DB_HOST'] ?? 'localhost');
-define('DB_NAME', $_ENV['DB_NAME'] ?? 'restaurante_db');
-define('DB_USER', $_ENV['DB_USER'] ?? 'root');
-define('DB_PASS', $_ENV['DB_PASS'] ?? '');
-define('DB_CHARSET', $_ENV['DB_CHARSET'] ?? 'utf8mb4');
+define('DB_HOST', envValue('DB_HOST', 'localhost'));
+define('DB_NAME', envValue('DB_NAME', 'mesora'));
+define('DB_USER', envValue('DB_USER', 'root'));
+define('DB_PASS', envValue('DB_PASS', ''));
+define('DB_CHARSET', envValue('DB_CHARSET', 'utf8mb4'));
 
 // ── Facturación — API de consulta DNI/RUC ─────────────────────
 // Obtén tu token en: https://api.apis.net.pe
-define('APIS_NET_TOKEN', $_ENV['APIS_NET_TOKEN'] ?? '');
+define('APIS_NET_TOKEN', envValue('APIS_NET_TOKEN', ''));
 
 date_default_timezone_set('America/Lima');
 require_once __DIR__ . '/session.php';

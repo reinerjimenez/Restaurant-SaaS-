@@ -8,8 +8,14 @@ from datetime import datetime, timezone
 
 
 def registrar(ruta: pathlib.Path, evento: dict) -> None:
-    with ruta.open('a', encoding='utf-8') as evidencia:
-        evidencia.write(json.dumps(evento, ensure_ascii=False, sort_keys=True) + '\n')
+    descriptor = os.open(ruta, os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0o600)
+    try:
+        linea = (json.dumps(evento, ensure_ascii=False, sort_keys=True) + '\n').encode('utf-8')
+        if os.write(descriptor, linea) != len(linea):
+            raise OSError('Escritura incompleta de evidencia')
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def reservar(destino: pathlib.Path, raiz: pathlib.Path) -> pathlib.Path:
@@ -21,7 +27,8 @@ def reservar(destino: pathlib.Path, raiz: pathlib.Path) -> pathlib.Path:
     marcador = destino / 'ola1.sql.reserve'
     descriptor = os.open(marcador, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     os.close(descriptor)
-    (destino / 'evidencia.jsonl').open('x', encoding='utf-8').close()
+    descriptor = os.open(destino / 'evidencia.jsonl', os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    os.close(descriptor)
     registrar(destino / 'evidencia.jsonl', {
         'evento': 'reserva_exclusiva', 'utc': datetime.now(timezone.utc).isoformat(),
         'archivo': 'ola1.sql',
@@ -36,14 +43,21 @@ def publicar(directorio: pathlib.Path) -> pathlib.Path:
     final = directorio / 'ola1.sql'
     if not marcador.is_file() or not temporal.is_file() or final.exists():
         raise ValueError('Reserva, temporal o destino final inválido')
-    os.rename(temporal, final)  # en Windows falla si el destino ya existe
-    contenido = final.read_bytes()
+    contenido = temporal.read_bytes()
+    evidencia = directorio / 'evidencia.jsonl'
+    evento = {'utc': datetime.now(timezone.utc).isoformat(), 'archivo': final.name,
+              'tamano': len(contenido), 'sha256': hashlib.sha256(contenido).hexdigest()}
+    registrar(evidencia, {'evento': 'publicacion_iniciada', **evento})
+    if os.name == 'nt':
+        os.rename(temporal, final)  # MoveFileEx sin reemplazo en Windows
+    else:
+        os.link(temporal, final)  # enlace POSIX con creación exclusiva
+        temporal.unlink()
     marcador.unlink()
-    registrar(directorio / 'evidencia.jsonl', {
-        'evento': 'publicacion', 'utc': datetime.now(timezone.utc).isoformat(),
-        'archivo': final.name, 'tamano': len(contenido),
-        'sha256': hashlib.sha256(contenido).hexdigest(),
-    })
+    publicado = final.read_bytes()
+    if len(publicado) != evento['tamano'] or hashlib.sha256(publicado).hexdigest() != evento['sha256']:
+        raise OSError('El archivo publicado difiere del temporal verificado')
+    registrar(evidencia, {'evento': 'publicacion_completada', **evento})
     return final
 
 

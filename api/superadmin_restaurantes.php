@@ -1,7 +1,7 @@
 <?php
 /**
  * api/superadmin_restaurantes.php — CRUD de restaurantes (solo superadmin)
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/credenciales.php';

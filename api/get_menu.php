@@ -1,7 +1,7 @@
 <?php
 /**
  * api/get_menu.php — Devuelve categorías y productos activos del restaurante
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);

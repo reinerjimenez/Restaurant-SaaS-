@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/admin/gastos.php — Gestión completa de gastos (Admin)
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);

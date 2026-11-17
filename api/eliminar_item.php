@@ -2,7 +2,7 @@
 /**
  * api/eliminar_item.php — Elimina un ítem de un pedido activo
  * Solo para admin / superadmin
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);

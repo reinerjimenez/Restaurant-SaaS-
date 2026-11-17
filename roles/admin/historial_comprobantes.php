@@ -2,7 +2,7 @@
 /**
  * roles/admin/historial_comprobantes.php
  * Historial de comprobantes con filtros, búsqueda y anulación.
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);

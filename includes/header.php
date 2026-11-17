@@ -2,7 +2,7 @@
 /**
  * header.php — Navbar compartida del sistema
  * Requiere que $pageTitle y $activeMenu estén definidos antes de incluir
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 
 if (!defined('BASE_URL') || empty($_SESSION['usuario_id']) || empty($_SESSION['rol'])) return;
@@ -23,8 +23,8 @@ $baseRol = BASE_URL . '/roles/' . $_SESSION['rol'];
 
 // ── Branding dinámico por restaurante ──────────────────────────
 // Para roles no-superadmin que tienen restaurante_id, cargar su branding
-$_brandingLogo   = BASE_URL . '/assets/logo.png'; // fallback genérico
-$_brandingNombre = 'R.DEV';                        // fallback genérico
+$_brandingLogo   = BASE_URL . '/assets/mesora.webp'; // fallback genérico
+$_brandingNombre = 'MESORA';                       // fallback genérico
 if (!empty($_SESSION['restaurante_id']) && $_SESSION['rol'] !== 'superadmin') {
     // Usar conexión ya existente si está disponible, si no abrir una nueva
     try {
@@ -57,8 +57,8 @@ if (!empty($_SESSION['restaurante_id']) && $_SESSION['rol'] !== 'superadmin') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <meta name="theme-color" content="#1A1A2E">
-    <meta name="description" content="Sistema de gestión para restaurante — R.DEV">
-    <title><?= htmlspecialchars($pageTitle ?? 'Sistema Restaurante') ?> | R.DEV</title>
+    <meta name="description" content="MESORA — Sistema de gestión para restaurantes">
+    <title><?= htmlspecialchars($pageTitle ?? 'MESORA') ?> | MESORA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -102,7 +102,7 @@ if (!empty($_SESSION['restaurante_id']) && $_SESSION['rol'] !== 'superadmin') {
 <nav class="navbar">
     <div class="navbar-brand">
         <?php if ($_SESSION['rol'] === 'superadmin'): ?>
-            <img src="<?= BASE_URL ?>/assets/logo.png" alt="R.DEV" style="height:32px;width:auto;">
+            <img src="<?= BASE_URL ?>/assets/mesora.webp" alt="MESORA" style="height:32px;width:auto;">
         <?php else: ?>
             <img src="<?= $_brandingLogo ?>" alt="<?= $_brandingNombre ?>"
                  style="height:36px;width:auto;max-width:120px;object-fit:contain;border-radius:4px;">

@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/admin/menu_productos.php — Gestión de productos del menú
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);

@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/atencion/historial.php — Historial de pedidos cobrados (solo lectura)
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);

@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/atencion/gastos.php — Registro de gastos del día (Atención)
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);

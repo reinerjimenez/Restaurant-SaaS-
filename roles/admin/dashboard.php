@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/admin/dashboard.php — Panel del Administrador
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
@@ -131,7 +131,7 @@ require_once '../../includes/header.php';
                     $logoPath = $restaurante['logo'] ?? null;
                     $logoSrc  = ($logoPath && file_exists($_SERVER['DOCUMENT_ROOT'] . $logoPath))
                         ? htmlspecialchars($logoPath)
-                        : BASE_URL . '/assets/logo.png';
+                        : BASE_URL . '/assets/mesora.webp';
                     ?>
                     <div style="width:64px;height:64px;border-radius:var(--radius-md);overflow:hidden;
                                 border:2px solid var(--border);background:var(--bg-secondary);

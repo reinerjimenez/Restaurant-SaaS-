@@ -3,7 +3,7 @@
  * api/marcar_item_listo.php — Cambia el estado de uno o varios items de pedido (cocina)
  * Acepta: { item_id: 5, estado: '...' }
  *      ó  { item_ids: [5,6,7], estado: '...' }
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../config/db.php';
 requireRole(['cocina', 'admin', 'encargado', 'superadmin', 'atencion']);

@@ -8,6 +8,9 @@ $base = 'restaurant_ola1_test';
 $perfil = ["GRANT USAGE ON *.* TO 'ola1_app'@'127.0.0.1'",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON `restaurant\\_ola1\\_test`.* TO 'ola1_app'@'127.0.0.1'"];
 if (!privilegios_validos($perfil, $base, ['SELECT', 'INSERT', 'UPDATE', 'DELETE'])) exit(1);
+$perfil_sin_escapar = ["GRANT USAGE ON *.* TO 'ola1_app'@'127.0.0.1'",
+    "GRANT SELECT, INSERT, UPDATE, DELETE ON `restaurant_ola1_test`.* TO 'ola1_app'@'127.0.0.1'"];
+if (!privilegios_validos($perfil_sin_escapar, $base, ['SELECT', 'INSERT', 'UPDATE', 'DELETE'])) exit(5);
 foreach ([
     "GRANT ALL PRIVILEGES ON *.* TO 'ola1_app'@'127.0.0.1'",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON `restaurant\\_ola1\\_test`.* TO 'ola1_app'@'127.0.0.1' WITH GRANT OPTION",

@@ -1,7 +1,7 @@
 <?php
 /**
  * roles/atencion/comanda.php — Tomar y añadir platos a un pedido
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);

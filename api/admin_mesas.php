@@ -1,7 +1,7 @@
 <?php
 /**
  * api/admin_mesas.php — CRUD de mesas (admin)
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);

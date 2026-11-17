@@ -1,7 +1,7 @@
 <?php
 /**
  * footer.php — Pie de página compartido
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 ?>
     </div> <!-- /main-content -->

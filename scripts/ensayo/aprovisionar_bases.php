@@ -21,10 +21,11 @@ try {
     $pdo = new PDO('mysql:host=127.0.0.1;port=3306;charset=utf8mb4', 'ola1_operador', $clave,
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     unset($clave);
-    $id = $pdo->query('SELECT VERSION() AS version, @@hostname AS host, @@port AS port, @@datadir AS datadir, CURRENT_USER() AS cuenta')->fetch(PDO::FETCH_ASSOC);
+    $id = $pdo->query('SELECT VERSION() AS version, @@hostname AS host, @@port AS port, @@datadir AS datadir, @@server_id AS server_id, CURRENT_USER() AS cuenta')->fetch(PDO::FETCH_ASSOC);
     if ($id['host'] !== $m['hostname'] || (int)$id['port'] !== 3306 ||
         strcasecmp((string)realpath($id['datadir']), (string)realpath($m['datadir'])) !== 0 ||
-        $id['version'] !== $m['mariadb_version'] || $id['cuenta'] !== 'ola1_operador@127.0.0.1') {
+        $id['version'] !== $m['mariadb_version'] || (int)$id['server_id'] !== $m['mariadb_server_id'] ||
+        $id['cuenta'] !== 'ola1_operador@127.0.0.1') {
         throw new RuntimeException('Servidor de aprovisionamiento incorrecto.');
     }
     $existentes = $pdo->query("SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME IN ('restaurant_ola1_test','restaurant_ola1_restore')")->fetchAll(PDO::FETCH_COLUMN);

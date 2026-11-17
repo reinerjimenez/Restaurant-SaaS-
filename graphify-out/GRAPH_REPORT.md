@@ -1,17 +1,17 @@
 # Graph Report - system-restaurant  (2026-11-11)
 
 ## Corpus Check
-- 136 files · ~110,505 words
+- 137 files · ~113,076 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 5 file(s) not represented in the graph (top: (none) 2, .css 2, .example 1)
 
 ## Summary
-- 654 nodes · 782 edges · 91 communities (29 shown, 62 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 28 edges (avg confidence: 0.87)
+- 670 nodes · 814 edges · 93 communities (30 shown, 63 thin omitted)
+- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 30 edges (avg confidence: 0.87)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `393a2e93`
+- Built from commit: `3a4c6ccb`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -50,6 +50,8 @@
 - 12_aceptacion_integral_ola_1.md
 - Preparación del entorno real de ensayo de Ola 1
 - Auditoría final del paquete de ensayo de Ola 1
+- restaurar_respaldo.php
+- modulo
 
 ## God Nodes (most connected - your core abstractions)
 1. `Hallazgos de auditoría` - 23 edges
@@ -58,10 +60,10 @@
 4. `autenticar_login()` - 10 edges
 5. `Base de datos e integridad del dinero` - 10 edges
 6. `Ola 1 — Estabilizar (1–2 semanas)` - 10 edges
-7. `ConexionReportePrueba` - 9 edges
-8. `jsonResponse()` - 8 edges
-9. `importe_centimos()` - 8 edges
-10. `normalizar_pagos()` - 8 edges
+7. `validar()` - 9 edges
+8. `modulo()` - 9 edges
+9. `PaqueteSimulado` - 9 edges
+10. `ConexionReportePrueba` - 9 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `H-020 — Sesiones no revocadas al desactivar (resultado)` --references--> `requireRole()`  [INFERRED]
@@ -78,7 +80,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (91 total, 62 thin omitted)
+## Communities (93 total, 63 thin omitted)
 
 ### Community 0 - "🍽️ RestSaaS — Sistema de Gestión para Restaurantes"
 Cohesion: 0.04
@@ -134,7 +136,7 @@ Nodes (3): abrirCaja(), cerrarCaja(), showToast()
 
 ### Community 60 - "sesion_cgi.py"
 Cohesion: 0.06
-Nodes (15): comprobar(), ejecutar(), cookie_sesion(), Formulario, hay_secreto(), main(), publicar(), registrar() (+7 more)
+Nodes (18): comprobar(), ejecutar(), cookie_sesion(), Formulario, hay_secreto(), main(), publicar(), registrar() (+10 more)
 
 ### Community 61 - "Ola 1 — Estabilizar (1–2 semanas)"
 Cohesion: 0.10
@@ -196,22 +198,26 @@ Nodes (10): 1. Inventario y requisitos, 2. Bases, cuentas y configuración priva
 Cohesion: 0.09
 Nodes (18): Alcance y método, Auditoría final del paquete de ensayo de Ola 1, Decisión y límites, Hallazgos, Resultado por objetivo, Archivos del cambio, Comprobaciones locales, Próximo paso manual (+10 more)
 
+### Community 91 - "modulo"
+Cohesion: 0.31
+Nodes (3): modulo(), PaqueteSimulado, fallar_al_confirmar()
+
 ## Knowledge Gaps
-- **62 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **63 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `guardar_gasto()` connect `finanzas.php` to `db.php`, `reportes_financieros.php`?**
-  _High betweenness centrality (0.099) - this node is a cross-community bridge._
+  _High betweenness centrality (0.094) - this node is a cross-community bridge._
 - **Should `🍽️ RestSaaS — Sistema de Gestión para Restaurantes` be split into smaller, more focused modules?**
   _Cohesion score 0.04081632653061224 - nodes in this community are weakly interconnected._
 - **Why does `fecha_reporte()` connect `reportes_financieros.php` to `finanzas.php`?**
-  _High betweenness centrality (0.092) - this node is a cross-community bridge._
+  _High betweenness centrality (0.088) - this node is a cross-community bridge._
 - **Should `main.js` be split into smaller, more focused modules?**
   _Cohesion score 0.07956989247311828 - nodes in this community are weakly interconnected._
 - **Why does `Aceptación integral de la Ola 1` connect `reportes_financieros.php` to `12_aceptacion_integral_ola_1.md`?**
-  _High betweenness centrality (0.092) - this node is a cross-community bridge._
+  _High betweenness centrality (0.087) - this node is a cross-community bridge._
 - **Should `finanzas.php` be split into smaller, more focused modules?**
   _Cohesion score 0.13911290322580644 - nodes in this community are weakly interconnected._
 - **Should `ConexionReportePrueba` be split into smaller, more focused modules?**

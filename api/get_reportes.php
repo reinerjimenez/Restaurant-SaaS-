@@ -1,7 +1,7 @@
 <?php
 /**
  * api/get_reportes.php — Datos de reportes filtrados por fecha
- * Sistema SaaS Restaurante | R.DEV
+ * MESORA | Sistema SaaS para restaurantes
  */
 require_once '../config/db.php';
 requireRole(['admin', 'encargado', 'superadmin']);
