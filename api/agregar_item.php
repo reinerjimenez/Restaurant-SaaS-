@@ -39,7 +39,7 @@ try {
     }
 
     bloquear_pedido($db, $restaurante_id, $pedido_id, 'activo');
-    $producto = $db->prepare('SELECT precio, nombre FROM productos WHERE id = ? AND restaurante_id = ? AND activo = 1');
+    $producto = $db->prepare('SELECT precio, nombre FROM productos WHERE id = ? AND restaurante_id = ? AND activo = 1 AND sin_stock = 0');
     $insertar = $db->prepare("INSERT INTO pedido_items
         (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, subtotal, notas, estado)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'pendiente')");

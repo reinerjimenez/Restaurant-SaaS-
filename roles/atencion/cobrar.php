@@ -334,7 +334,6 @@ async function buscarDocumento() {
 
         if (json.success && json.data) {
             const d = json.data;
-            status.innerHTML = '<i class="fa-solid fa-circle-check" style="color:var(--success);"></i> Datos encontrados. Verifica antes de continuar.';
             document.getElementById('input-nombre-cliente').value = d.nombre || '';
 
             if (tipo === 'ruc') {
@@ -342,6 +341,13 @@ async function buscarDocumento() {
                 document.getElementById('input-distrito').value    = d.distrito     || '';
                 document.getElementById('input-provincia').value   = d.provincia    || '';
                 document.getElementById('input-departamento').value= d.departamento || '';
+                const datosFiscales = ['direccion', 'distrito', 'provincia', 'departamento'];
+                const incompletos = datosFiscales.filter(campo => !String(d[campo] || '').trim());
+                status.innerHTML = incompletos.length
+                    ? '<i class="fa-solid fa-triangle-exclamation" style="color:var(--warning);"></i> Se encontró el nombre, pero la consulta no proporcionó todos los datos fiscales. Complétalos y verifícalos antes de continuar.'
+                    : '<i class="fa-solid fa-circle-check" style="color:var(--success);"></i> Datos fiscales encontrados. Verifica antes de continuar.';
+            } else {
+                status.innerHTML = '<i class="fa-solid fa-circle-check" style="color:var(--success);"></i> Datos encontrados. Verifica antes de continuar.';
             }
             document.getElementById('campos-cliente').style.display = '';
         } else {

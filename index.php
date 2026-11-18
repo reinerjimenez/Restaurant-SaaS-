@@ -28,6 +28,18 @@ unset($_SESSION['login_error']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="MESORA — Sistema SaaS de gestión para restaurantes. Ingresa a tu cuenta.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MESORA">
+    <meta property="og:title" content="MESORA | Gestión inteligente para restaurantes">
+    <meta property="og:description" content="Gestiona pedidos, cocina, caja y tu restaurante desde MESORA.">
+    <meta property="og:url" content="<?= htmlspecialchars(PUBLIC_URL . '/', ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:image" content="<?= htmlspecialchars(PUBLIC_URL . BASE_URL . '/assets/mesora-share.jpg?v=2', ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:image:secure_url" content="<?= htmlspecialchars(PUBLIC_URL . BASE_URL . '/assets/mesora-share.jpg?v=2', ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="MESORA, gestión inteligente para restaurantes">
+    <meta name="twitter:card" content="summary_large_image">
     <title>Iniciar sesión | MESORA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

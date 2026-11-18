@@ -80,6 +80,8 @@ if ($rol === 'superadmin') {
 
         <?php elseif ($rol === 'cocina'): ?>
             <li><a href="<?= BASE_URL ?>/roles/cocina/dashboard.php"><span class="menu-icon"><i class="fa-solid fa-kitchen-set"></i></span> Panel Cocina</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/cocina/disponibilidad.php"><span class="menu-icon"><i class="fa-solid fa-boxes-stacked"></i></span> Platos sin stock</a></li>
+            <li><a href="#cocina-config" onclick="event.preventDefault(); const p=document.getElementById('cocina-config'); if(p) p.hidden=!p.hidden;"><span class="menu-icon"><i class="fa-solid fa-sliders"></i></span> Configuración</a></li>
         <?php endif; ?>
     </ul>
 

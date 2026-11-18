@@ -21,7 +21,8 @@ function sesion_expirada(array $sesion, int $ahora): bool {
     $inicio = (int)($sesion['_inicio_sesion'] ?? 0);
     $actividad = (int)($sesion['_actividad_sesion'] ?? 0);
     return $inicio <= 0 || $actividad < $inicio || $inicio > $ahora || $actividad > $ahora
-        || $ahora - $inicio >= SESION_DURACION || $ahora - $actividad >= SESION_INACTIVIDAD;
+        || ((($sesion['rol'] ?? '') !== 'cocina' || empty($sesion['_turno_cocina'])) && $ahora - $inicio >= SESION_DURACION)
+        || $ahora - $actividad >= SESION_INACTIVIDAD;
 }
 
 function iniciar_sesion(): void {

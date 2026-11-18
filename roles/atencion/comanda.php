@@ -145,6 +145,7 @@ require_once '../../includes/header.php';
             <div class="producto-card menu-item"
                 data-cat="<?= $p['categoria_id'] ?>"
                 data-id="<?= $p['id'] ?>"
+                data-sin-stock="<?= (int)$p['sin_stock'] ?>"
                 data-nombre="<?= htmlspecialchars($p['nombre']) ?>">
                 <div class="producto-thumb">
                     <?php
@@ -156,13 +157,14 @@ require_once '../../includes/header.php';
                 <div class="producto-info">
                     <div class="producto-nombre"><?= htmlspecialchars($p['nombre']) ?></div>
                     <div class="producto-precio">S/ <?= number_format($p['precio'],2) ?></div>
+                    <?php if ($p['sin_stock']): ?><div class="badge badge-danger">Agotado</div><?php endif; ?>
                     <?php if ($p['tiene_opciones']): ?>
                     <div style="font-size:.68rem;color:var(--warning);font-weight:600;">
                         <i class="fa-solid fa-sliders"></i> Personalizable
                     </div>
                     <?php endif; ?>
-                    <button class="btn-agregar" onclick="agregarProducto(<?= htmlspecialchars(json_encode($p)) ?>)">
-                        <i class="fa-solid fa-plus"></i> Agregar
+                    <button class="btn-agregar" <?= $p['sin_stock'] ? 'disabled aria-disabled="true"' : '' ?> onclick="agregarProducto(<?= htmlspecialchars(json_encode($p)) ?>)">
+                        <i class="fa-solid <?= $p['sin_stock'] ? 'fa-ban' : 'fa-plus' ?>"></i> <?= $p['sin_stock'] ? 'Agotado' : 'Agregar' ?>
                     </button>
                 </div>
             </div>

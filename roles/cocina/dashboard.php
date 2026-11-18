@@ -18,6 +18,38 @@ require_once '../../includes/header.php';
 /* Ajustar colores de texto para el estado vacío ahora que el fondo es blanco */
 .cocina-vacia { color: var(--text-secondary); }
 .cocina-vacia .icon { color: var(--border); }
+.cocina-config { position:fixed; z-index:1200; right:16px; top:72px; width:min(320px,calc(100vw - 32px)); padding:18px; background:#fff; color:#172033; border:1px solid #cbd5e1; border-radius:12px; box-shadow:0 12px 36px #0003; }
+.cocina-config[hidden] { display:none; }
+.cocina-config button,.cocina-config select { min-height:44px; }
+/* La tarjeta y sus controles crecen junto con la tipografía. */
+body { --ck-card-width: 180px; --ck-space: 4px; --ck-gap: 10px; --ck-qty-size: 18px; --ck-icon-box: 24px; --ck-icon-font: .75rem; --ck-font: .7rem; --ck-mesa-font: .85rem; --ck-secondary-font: .6rem; --ck-tipo-font: .72rem; --ck-time-font: .6rem; --ck-button-font: .75rem; }
+body.cocina-lectura-grande { --ck-card-width: 240px; --ck-space: 9px; --ck-gap: 13px; --ck-qty-size: 30px; --ck-icon-box: 28px; --ck-icon-font: .85rem; --ck-font: 1.05rem; --ck-mesa-font: 1.05rem; --ck-secondary-font: .85rem; --ck-tipo-font: .96rem; --ck-time-font: .9rem; --ck-button-font: .95rem; }
+body.cocina-lectura-extra { --ck-card-width: 310px; --ck-space: 14px; --ck-gap: 16px; --ck-qty-size: 38px; --ck-icon-box: 36px; --ck-icon-font: 1.05rem; --ck-font: 1.35rem; --ck-mesa-font: 1.25rem; --ck-secondary-font: 1.05rem; --ck-tipo-font: 1.13rem; --ck-time-font: 1.15rem; --ck-button-font: 1.15rem; }
+.cocina-grid { gap: var(--ck-gap); }
+.cocina-card { flex: 0 0 min(var(--ck-card-width), calc(100vw - 40px)); }
+.cocina-card-header { padding: var(--ck-space); gap: var(--ck-space); }
+.ck-items { padding: var(--ck-space); }
+.ck-item { align-items: center; gap: var(--ck-space); padding: var(--ck-space) 0; }
+.ck-item-info { min-width: 0; overflow-wrap: anywhere; }
+.ck-qty { width: var(--ck-qty-size); height: var(--ck-qty-size); font-size: var(--ck-secondary-font); }
+.ck-mesa { font-size: var(--ck-mesa-font); }
+.ck-tipo span { font-size: var(--ck-secondary-font) !important; }
+.ck-tipo .ck-etiqueta-tipo { display:inline-flex; align-items:center; gap:3px; padding:2px 5px; border-radius:4px; font-size:var(--ck-tipo-font) !important; font-weight:700; line-height:1.15; white-space:nowrap; color:#fff; background:#253149; }
+.ck-tipo .ck-etiqueta-tipo.aqui { background:#17445a; }
+.ck-btn-listo { position:relative; display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; padding:0; background:transparent !important; }
+.ck-btn-listo::before { content:""; position:absolute; width:var(--ck-icon-box); height:var(--ck-icon-box); border-radius:4px; background:var(--warning-bg); }
+.ck-btn-listo.listo::before { background:var(--success-bg); }
+.ck-btn-listo i { position:relative; font-size:var(--ck-icon-font); }
+.ck-card-footer { padding: var(--ck-space) !important; }
+.ck-card-footer .ck-btn { position:relative; isolation:isolate; min-height:44px; padding:var(--ck-space) !important; font-size:var(--ck-button-font) !important; background:transparent !important; }
+.ck-card-footer .ck-btn::before { content:""; position:absolute; inset:2px 0; z-index:-1; border-radius:6px; background:var(--warning-bg); }
+.ck-card-footer .ck-btn.listo::before { background:var(--success-bg); }
+body.cocina-palette-suave .cocina-header, body.cocina-palette-suave .cocina-card, body.cocina-palette-suave .cocina-card-header { background:#263746; border-color:#526879; }
+body.cocina-palette-suave .cocina-card.urgente .cocina-card-header { background:#694b43; }
+body.cocina-palette-suave .ck-nombre { color:#fff; }
+.ck-nombre { font-size:var(--ck-font, 1rem) !important; }
+.ck-opciones,.ck-tipo { font-size:var(--ck-secondary-font) !important; color:#e2e8f0 !important; }
+.ck-tiempo { font-size:var(--ck-time-font) !important; padding: calc(var(--ck-space) / 2) var(--ck-space); }
 
 /* ── Fullscreen: clase aplicada por JS al body ── */
 body.cocina-fs-activo .navbar         { display: none !important; }
@@ -76,6 +108,7 @@ body.cocina-fs-activo .main-content   {
             <button id="btn-activar-audio" class="btn btn-sm" style="background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.3); color:white; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; cursor:pointer; transition:all 0.2s;" onclick="activarAudio()">
                 <i class="fa-solid fa-volume-xmark"></i> Activar Sonido
             </button>
+            <button class="btn btn-sm" style="min-height:44px" onclick="document.getElementById('cocina-config').hidden = !document.getElementById('cocina-config').hidden"><i class="fa-solid fa-sliders"></i> Configuración</button>
             <button id="btn-fullscreen" title="Pantalla completa" onclick="toggleFullscreen()">
                 <i class="fa-solid fa-expand" id="ico-fullscreen"></i>
                 <span class="fs-label">Full Screen</span>
@@ -85,10 +118,17 @@ body.cocina-fs-activo .main-content   {
     </div>
     <div class="cocina-status">
         <div class="dot"></div>
-        <span>En vivo · actualiza cada 10s</span>
+        <span id="cocina-conexion">Conectando…</span>
         <span id="cocina-count" style="background:rgba(255,255,255,.15);border-radius:999px;padding:4px 12px;font-weight:700;"></span>
     </div>
 </div>
+<section id="cocina-config" class="cocina-config" hidden aria-label="Configuración de lectura">
+    <h2>Lectura en cocina</h2>
+    <label for="ck-tamano">Tamaño del texto</label>
+    <select id="ck-tamano" class="form-control"><option value="normal">Normal</option><option value="grande">Grande</option><option value="extra">Extra grande</option></select>
+    <label for="ck-colores">Colores</label>
+    <select id="ck-colores" class="form-control"><option value="vivos">Estándar</option><option value="suave">Menos saturados</option></select>
+</section>
 
 <div id="cocina-contenido" style="padding: 4px 16px 16px; height: calc(100vh - 110px); display: flex; flex-direction: column; overflow: hidden;">
     <div class="cocina-vacia">
@@ -102,6 +142,23 @@ const RESTAURANTE_ID = <?= $restauranteId ?>;
 
 let estadoPrevio = null;
 let audioActivado = false;
+let cocinaUltimoExito = 0;
+const preferenciasKey = `mesora:cocina:${RESTAURANTE_ID}`;
+function aplicarPreferenciasCocina() {
+    let p = {}; try { p = JSON.parse(localStorage.getItem(preferenciasKey) || '{}'); } catch (_) {}
+    document.body.classList.toggle('cocina-lectura-grande', p.tamano === 'grande');
+    document.body.classList.toggle('cocina-lectura-extra', p.tamano === 'extra');
+    document.body.classList.toggle('cocina-palette-suave', p.colores === 'suave');
+    document.getElementById('ck-tamano').value = p.tamano || 'normal';
+    document.getElementById('ck-colores').value = p.colores || 'vivos';
+}
+function guardarPreferenciasCocina() {
+    try { localStorage.setItem(preferenciasKey, JSON.stringify({tamano:document.getElementById('ck-tamano').value,colores:document.getElementById('ck-colores').value})); } catch (_) {}
+    aplicarPreferenciasCocina();
+}
+document.getElementById('ck-tamano').addEventListener('change', guardarPreferenciasCocina);
+document.getElementById('ck-colores').addEventListener('change', guardarPreferenciasCocina);
+aplicarPreferenciasCocina();
 
 function activarAudio() {
     const audio = document.getElementById('timbre-audio');
@@ -170,6 +227,8 @@ function renderPedidos(pedidos) {
     const count = document.getElementById('cocina-count');
 
     detectarCambiosYAlertar(pedidos);
+    cocinaUltimoExito = Date.now();
+    document.getElementById('cocina-conexion').textContent = 'Conectado · actualizado ahora';
 
     if (!pedidos || pedidos.length === 0) {
         count.textContent = '0 pedidos';
@@ -190,12 +249,14 @@ function renderPedidos(pedidos) {
     const pedidosMostrados = [...pedidos].reverse();
 
     pedidosMostrados.forEach(p => {
-        const minutos = parseInt(p.minutos_transcurridos) || 0;
+        const minutos = Math.max(0, Math.floor(((Date.now() - cocinaUltimoExito) / 1000 + (parseInt(p.segundos_transcurridos) || parseInt(p.minutos_transcurridos) * 60)) / 60));
         const urgente = minutos >= 20;
 
         const card = document.createElement('div');
         card.className = `cocina-card${urgente ? ' urgente' : ''}`;
         card.id = `ck-pedido-${p.id}`;
+        card.dataset.segundos = parseInt(p.segundos_transcurridos) || 0;
+        card.dataset.recibido = cocinaUltimoExito;
 
         const todosLosIds = (p.items || []).map(i => i.id);
         const todosListos = (p.items || []).length > 0 && (p.items || []).every(i => i.estado === 'listo');
@@ -262,16 +323,13 @@ function renderPedidos(pedidos) {
             ckItemsContainer.appendChild(ckItem);
         });
 
-        const tipoColor = p.tipo === 'aqui' ? 'var(--info)' : 'var(--warning)';
-        const tipoBg    = p.tipo === 'aqui' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(250, 204, 21, 0.15)';
-
         // Cabecera de la card: mesa_numero e id son enteros del servidor; tipo es enum
         card.innerHTML = `
             <div class="cocina-card-header">
                 <div>
                     <div class="ck-mesa">${p.mesa_numero ? 'Mesa ' + parseInt(p.mesa_numero) : 'Llevar'}</div>
                     <div class="ck-tipo" style="margin-top:2px;">
-                        <span style="color: ${tipoColor}; background: ${tipoBg}; padding: 1px 3px; border-radius: 4px; font-weight: bold; font-size: 0.6rem; display: inline-flex; align-items: center; gap: 2px;">
+                        <span class="ck-etiqueta-tipo ${p.tipo === 'aqui' ? 'aqui' : 'llevar'}">
                             <i class="fa-solid ${p.tipo === 'aqui' ? 'fa-house' : 'fa-bag-shopping'}"></i>
                             ${p.tipo === 'aqui' ? 'Comer aquí' : 'Para llevar'}
                         </span>
@@ -356,20 +414,38 @@ async function cambiarEstadoItem(btn, ids, estadoActual) {
     }
 }
 
-function cargarPedidosAhora() {
-    fetch(`${BASE_URL}/api/get_pedidos_activos.php?restaurante_id=${RESTAURANTE_ID}`)
-        .then(r => r.json())
-        .then(data => { if (data.success) renderPedidos(data.data); })
-        .catch(e => console.warn(e));
+let consultaEnCurso = false;
+async function cargarPedidosAhora() {
+    if (consultaEnCurso) return;
+    consultaEnCurso = true;
+    try {
+        const r = await fetch(`${BASE_URL}/api/get_pedidos_activos.php`, {cache:'no-store', headers:{'X-Requested-With':'XMLHttpRequest'}});
+        if (r.status === 401) { window.location.href = `${BASE_URL}/index.php`; return; }
+        const j = await r.json();
+        if (!r.ok || !j.success) throw new Error(j.message || 'No se pudo actualizar');
+        renderPedidos(j.data);
+    } catch (e) {
+        const badge = document.getElementById('cocina-conexion');
+        badge.textContent = 'Sin conexión · reintentando';
+        badge.style.color = '#ffd0a8';
+        console.warn('Fallo al actualizar cocina:', e);
+    } finally { consultaEnCurso = false; }
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    iniciarPolling(
-        `${BASE_URL}/api/get_pedidos_activos.php?restaurante_id=${RESTAURANTE_ID}`,
-        renderPedidos,
-        10000
-    );
-});
+setInterval(cargarPedidosAhora, 5000);
+document.addEventListener('DOMContentLoaded', cargarPedidosAhora);
+setInterval(() => { if (cocinaUltimoExito) renderizarMinutos(); }, 1000);
+function renderizarMinutos() {
+    document.querySelectorAll('.cocina-card').forEach(card => {
+        const base = Number(card.dataset.segundos || 0);
+        const elapsed = base + Math.floor((Date.now() - Number(card.dataset.recibido || cocinaUltimoExito)) / 1000);
+        const min = Math.floor(elapsed / 60);
+        const el = card.querySelector('.ck-tiempo');
+        if (el) el.textContent = `${min} min`;
+        card.classList.toggle('urgente', min >= 20);
+    });
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) cargarPedidosAhora(); });
+window.addEventListener('online', cargarPedidosAhora);
 
 /* ── Fullscreen API ── */
 function aplicarModoFS(activo) {

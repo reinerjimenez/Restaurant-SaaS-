@@ -19,7 +19,7 @@ $stCats->execute([$restauranteId]);
 $categorias = $stCats->fetchAll();
 
 $stProds = $db->prepare("
-    SELECT id, categoria_id, nombre, descripcion, precio, tiene_opciones
+    SELECT id, categoria_id, nombre, descripcion, precio, tiene_opciones, sin_stock
     FROM productos
     WHERE restaurante_id = ? AND activo = 1
     ORDER BY categoria_id, nombre ASC

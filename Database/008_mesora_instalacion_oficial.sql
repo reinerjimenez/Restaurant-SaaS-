@@ -101,6 +101,7 @@ CREATE TABLE `productos` (
   `imagen` varchar(255) DEFAULT NULL,
   `tiene_opciones` tinyint(1) DEFAULT 0,
   `activo` tinyint(1) DEFAULT 1,
+  `sin_stock` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `categoria_id` (`categoria_id`),
   KEY `restaurante_id` (`restaurante_id`)

@@ -15,7 +15,7 @@ $db = getDB();
 $stPedidos = $db->prepare("
     SELECT pe.id, pe.tipo, pe.total, pe.created_at,
            m.numero AS mesa_numero,
-           TIMESTAMPDIFF(MINUTE, pe.created_at, NOW()) AS minutos_transcurridos,
+           TIMESTAMPDIFF(SECOND, pe.created_at, NOW()) AS segundos_transcurridos,
            (
                SELECT COALESCE(MAX(pi.created_at), pe.created_at)
                FROM pedido_items pi
@@ -40,10 +40,10 @@ if ($pedidos) {
     
     $stItems = $db->prepare("
         SELECT pi.pedido_id, pi.id, pi.cantidad, pi.precio_unitario, pi.subtotal, pi.notas, pi.estado,
-               pr.nombre,
+               COALESCE(pr.nombre, pi.nombre_producto, 'Plato') AS nombre,
                GROUP_CONCAT(ov.valor SEPARATOR ' · ') AS opciones
         FROM pedido_items pi
-        JOIN productos pr ON pr.id = pi.producto_id
+        LEFT JOIN productos pr ON pr.id = pi.producto_id
         LEFT JOIN pedido_item_opciones pio ON pio.item_id = pi.id
         LEFT JOIN opciones_valor ov ON ov.id = pio.valor_id
         WHERE pi.pedido_id IN ($placeholders) AND pi.estado != 'entregado'

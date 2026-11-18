@@ -56,6 +56,7 @@ define('DB_NAME', envValue('DB_NAME', 'mesora'));
 define('DB_USER', envValue('DB_USER', 'root'));
 define('DB_PASS', envValue('DB_PASS', ''));
 define('DB_CHARSET', envValue('DB_CHARSET', 'utf8mb4'));
+define('PUBLIC_URL', rtrim((string)envValue('PUBLIC_URL', 'https://mesora.iceiy.com'), '/'));
 
 // ── Facturación — API de consulta DNI/RUC ─────────────────────
 // Obtén tu token en: https://api.apis.net.pe
@@ -247,6 +248,30 @@ function requireRole(array $roles_permitidos): void {
             http_response_code(503);
             if ($es_ajax) jsonResponse(false, null, 'No se pudo verificar el restaurante. Intenta nuevamente.');
             exit('No se pudo verificar el restaurante. Intenta nuevamente.');
+        }
+    }
+
+    // La sesión de cocina queda vinculada al turno que atiende. Al cerrar caja,
+    // también cuando se reabre inmediatamente, el siguiente sondeo obliga a ingresar otra vez.
+    if ($rol === 'cocina' && in_array('cocina', $roles_permitidos, true)) {
+        try {
+            $stTurno = getDB()->prepare('SELECT id FROM turnos WHERE restaurante_id = ? AND fin IS NULL LIMIT 1');
+            $stTurno->execute([(int)$_SESSION['restaurante_id']]);
+            $turnoActual = $stTurno->fetchColumn();
+            if ($turnoActual !== false) {
+                $turnoActual = (int)$turnoActual;
+                if (isset($_SESSION['_turno_cocina']) && (int)$_SESSION['_turno_cocina'] !== $turnoActual) {
+                    $terminar_sesion('El turno de caja terminó. Inicia sesión para continuar en cocina.');
+                }
+                $_SESSION['_turno_cocina'] = $turnoActual;
+            } elseif (isset($_SESSION['_turno_cocina'])) {
+                $terminar_sesion('El turno de caja terminó. Inicia sesión cuando se abra el siguiente turno.');
+            }
+        } catch (Throwable $e) {
+            error_log('No se pudo verificar el turno de cocina.');
+            http_response_code(503);
+            if ($es_ajax) jsonResponse(false, null, 'No se pudo verificar el turno. Intenta nuevamente.');
+            exit('No se pudo verificar el turno. Intenta nuevamente.');
         }
     }
 
