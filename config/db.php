@@ -19,7 +19,8 @@ function loadEnv($path) {
             $value = trim($value);
             // Quitar comillas si las tiene
             $value = trim($value, '"\'');
-            if (!array_key_exists($name, $_SERVER) && !array_key_exists($name, $_ENV)) {
+            if (!array_key_exists($name, $_SERVER) && !array_key_exists($name, $_ENV)
+                && getenv($name) === false) {
                 putenv(sprintf('%s=%s', $name, $value));
                 $_ENV[$name] = $value;
                 $_SERVER[$name] = $value;
@@ -184,28 +185,26 @@ function requireRole(array $roles_permitidos): void {
 
     $metodo = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     $ahora = time();
-    if ($metodo === 'POST' || $ahora - (int)($_SESSION['_last_revalidated'] ?? 0) >= 60) {
-        try {
-            $st = getDB()->prepare("SELECT u.activo AS usuario_activo, u.rol, u.session_version,
-                                             u.restaurante_id, r.activo AS restaurante_activo
-                                      FROM usuarios u LEFT JOIN restaurantes r ON r.id = u.restaurante_id
-                                      WHERE u.id = ?");
-            $st->execute([$_SESSION['usuario_id']]);
-            $fila = $st->fetch();
+    // Revalidar cada petición protegida para que una revocación afecte al siguiente GET.
+    try {
+        $st = getDB()->prepare("SELECT u.activo AS usuario_activo, u.rol, u.session_version,
+                                         u.restaurante_id, r.activo AS restaurante_activo
+                                  FROM usuarios u LEFT JOIN restaurantes r ON r.id = u.restaurante_id
+                                  WHERE u.id = ?");
+        $st->execute([$_SESSION['usuario_id']]);
+        $fila = $st->fetch();
 
-            if (!$fila || !$fila['usuario_activo'] || $fila['rol'] !== $rol
-                || (int)$fila['session_version'] !== (int)($_SESSION['session_version'] ?? 0)
-                || ($rol !== 'superadmin' && (!$fila['restaurante_activo']
-                    || (int)$fila['restaurante_id'] !== (int)($_SESSION['restaurante_id'] ?? 0)))) {
-                $terminar_sesion('La sesión ya no es válida. Vuelve a iniciar sesión.');
-            }
-            $_SESSION['_last_revalidated'] = $ahora;
-        } catch (Throwable $e) {
-            error_log('No se pudo revalidar la sesión.');
-            http_response_code(503);
-            if ($es_ajax) jsonResponse(false, null, 'No se pudo verificar la sesión. Intenta nuevamente.');
-            exit('No se pudo verificar la sesión. Intenta nuevamente.');
+        if (!$fila || !$fila['usuario_activo'] || $fila['rol'] !== $rol
+            || (int)$fila['session_version'] !== (int)($_SESSION['session_version'] ?? 0)
+            || ($rol !== 'superadmin' && (!$fila['restaurante_activo']
+                || (int)$fila['restaurante_id'] !== (int)($_SESSION['restaurante_id'] ?? 0)))) {
+            $terminar_sesion('La sesión ya no es válida. Vuelve a iniciar sesión.');
         }
+    } catch (Throwable $e) {
+        error_log('No se pudo revalidar la sesión.');
+        http_response_code(503);
+        if ($es_ajax) jsonResponse(false, null, 'No se pudo verificar la sesión. Intenta nuevamente.');
+        exit('No se pudo verificar la sesión. Intenta nuevamente.');
     }
 
     if ($rol === 'superadmin' && $roles_permitidos !== ['superadmin']) {

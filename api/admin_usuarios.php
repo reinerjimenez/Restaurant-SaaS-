@@ -78,6 +78,7 @@ switch ($accion) {
         // — H-019: validar jerarquía sobre el rol ACTUAL del objetivo —
         // El encargado solo puede gestionar atencion/cocina; no puede tocar admin ni encargado
         if ($rolActual === 'encargado' && !in_array($rolTarget, ['atencion', 'cocina'], true)) {
+            http_response_code(403);
             jsonResponse(false, null, 'No tienes permiso para editar este usuario');
         }
         // El admin no puede editar a otros admin ni a superadmin (ya cubierto arriba)

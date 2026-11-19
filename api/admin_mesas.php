@@ -46,6 +46,10 @@ switch ($accion) {
         $stDup->execute([$restauranteId, $numero, $id]);
         if ($stDup->fetch()) jsonResponse(false, null, "Ya existe otra Mesa con el número $numero");
 
+        $stPropia = $db->prepare('SELECT id FROM mesas WHERE id = ? AND restaurante_id = ?');
+        $stPropia->execute([$id, $restauranteId]);
+        if (!$stPropia->fetchColumn()) jsonResponse(false, null, 'Mesa no encontrada');
+
         $st = $db->prepare("UPDATE mesas SET numero=?, capacidad=?, activo=? WHERE id=? AND restaurante_id=?");
         $st->execute([$numero, $capacidad, $activo, $id, $restauranteId]);
         jsonResponse(true, null, "Mesa $numero actualizada correctamente");

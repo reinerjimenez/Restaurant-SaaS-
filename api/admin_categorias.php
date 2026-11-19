@@ -36,6 +36,10 @@ switch ($accion) {
 
         if (!$id || empty($nombre) || mb_strlen($nombre) > 100) jsonResponse(false, null, 'Datos inválidos');
 
+        $stPropia = $db->prepare('SELECT id FROM categorias WHERE id = ? AND restaurante_id = ?');
+        $stPropia->execute([$id, $restauranteId]);
+        if (!$stPropia->fetchColumn()) jsonResponse(false, null, 'Categoría no encontrada');
+
         $st = $db->prepare("UPDATE categorias SET nombre=?, icono=?, orden=?, activo=? WHERE id=? AND restaurante_id=?");
         $st->execute([$nombre, $icono, $orden, $activo, $id, $restauranteId]);
         jsonResponse(true, null, "Categoría \"$nombre\" actualizada correctamente");

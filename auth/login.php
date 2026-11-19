@@ -48,7 +48,6 @@ try {
         'email' => $usuario['email'],
         'rol' => $usuario['rol'],
         'session_version' => (int)$usuario['session_version'],
-        '_last_revalidated' => $ahora,
         '_inicio_sesion' => $ahora,
         '_actividad_sesion' => $ahora,
     ];

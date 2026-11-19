@@ -26,6 +26,11 @@ switch ($accion) {
         $tieneOpc     = !empty($input['tiene_opciones']) ? 1 : 0;
         $grupos       = $input['grupos']              ?? [];
 
+        // La API crea grupos nuevos para este producto; no acepta IDs de grupos existentes.
+        if (!is_array($grupos) || array_filter($grupos, static fn($grupo): bool => !is_array($grupo) || array_key_exists('id', $grupo))) {
+            jsonResponse(false, null, 'Los grupos deben definirse sin identificadores ajenos.');
+        }
+
         if (empty($nombre) || mb_strlen($nombre) > 100 || !$categoriaId || $precio <= 0 || $precio > 999999) {
             jsonResponse(false, null, 'Datos inválidos: Nombre (máx 100 caracteres), categoría y precio válidos requeridos');
         }

@@ -1,0 +1,687 @@
+{
+  "fecha": "2026-11-19",
+  "base": "mesora_aislamiento_test",
+  "servidor": "http://127.0.0.1:8098/MESORA",
+  "pedidoAId": 2,
+  "pedidoBId": 1,
+  "pedidoBCobradoId": 3,
+  "comprobanteBId": 1,
+  "itemBId": 1,
+  "evidencias": [
+    {
+      "categoria": 1,
+      "nombre": "pedido B",
+      "peticion": {
+        "metodo": "GET",
+        "ruta": "/api/get_pedido_detalle.php?id=1",
+        "carga": null
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Pedido no encontrado"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 1,
+      "nombre": "producto y opciones B",
+      "peticion": {
+        "metodo": "GET",
+        "ruta": "/api/get_opciones.php?producto_id=3",
+        "carga": null
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Producto no válido"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 1,
+      "nombre": "comprobante B",
+      "peticion": {
+        "metodo": "GET",
+        "ruta": "/roles/admin/ver_comprobante.php?id=1",
+        "carga": null
+      },
+      "respuesta": {
+        "status": 302,
+        "success": null,
+        "message": "historial_comprobantes.php"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 1,
+      "nombre": "turno B",
+      "peticion": {
+        "metodo": "GET",
+        "ruta": "/roles/admin/turno_detalle.php?id=2",
+        "carga": null
+      },
+      "respuesta": {
+        "status": 302,
+        "success": null,
+        "message": "caja.php"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "mesa B en pedido",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/crear_pedido.php",
+        "carga": {
+          "mesa_id": 4,
+          "tipo": "aqui"
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Mesa no encontrada"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "agregar ítem a pedido B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/agregar_item.php",
+        "carga": {
+          "pedido_id": 1,
+          "operacion_id": "67fc0dda106d822ee2177a3e1d8210a2",
+          "items": [
+            {
+              "producto_id": 1,
+              "cantidad": 1,
+              "selecciones": []
+            }
+          ]
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "El pedido no existe o ya cambió de estado."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "cobrar pedido B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/cobrar_pedido.php",
+        "carga": {
+          "pedido_id": 1,
+          "pagos": [
+            {
+              "metodo": "efectivo",
+              "monto": "10.00"
+            }
+          ]
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "El pedido no existe o ya cambió de estado."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "cancelar pedido B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/cancelar_pedido.php",
+        "carga": {
+          "id": 1
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "El pedido no existe o ya cambió de estado."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "eliminar ítem B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/eliminar_item.php",
+        "carga": {
+          "item_id": 1
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Ítem no encontrado o pedido ya no activo"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "marcar ítem B listo",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/marcar_item_listo.php",
+        "carga": {
+          "item_id": 1,
+          "estado": "listo"
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Ítem no encontrado en este restaurante."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "editar producto B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/admin_productos.php",
+        "carga": {
+          "accion": "editar",
+          "id": 3,
+          "categoria_id": 1,
+          "nombre": "ATAQUE",
+          "precio": 10,
+          "activo": 1,
+          "tiene_opciones": 0
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Producto no encontrado o no autorizado"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "crear producto con categoría B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/admin_productos.php",
+        "carga": {
+          "accion": "crear",
+          "categoria_id": 2,
+          "nombre": "ATAQUE",
+          "precio": 10,
+          "activo": 1,
+          "tiene_opciones": 0
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Categoría no válida"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "editar mesa B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/admin_mesas.php",
+        "carga": {
+          "accion": "editar",
+          "id": 4,
+          "numero": 90,
+          "capacidad": 4,
+          "activo": 1
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Mesa no encontrada"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "editar categoría B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/admin_categorias.php",
+        "carga": {
+          "accion": "editar",
+          "id": 2,
+          "nombre": "ATAQUE",
+          "activo": 1
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Categoría no encontrada"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "eliminar mesa B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/admin_mesas.php",
+        "carga": {
+          "accion": "eliminar",
+          "id": 4
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Mesa no encontrada"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "eliminar producto B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/admin_productos.php",
+        "carga": {
+          "accion": "eliminar",
+          "id": 4
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Producto no encontrado"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "editar usuario B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/admin_usuarios.php",
+        "carga": {
+          "accion": "editar",
+          "id": 6,
+          "nombre": "ATAQUE",
+          "email": "admin.B@aislamiento.test",
+          "rol": "encargado",
+          "activo": 1
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Usuario no encontrado"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "reabrir venta B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/reabrir_venta.php",
+        "carga": {
+          "id": 3
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "El pedido no existe o ya cambió de estado."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "eliminar venta B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/eliminar_venta.php",
+        "carga": {
+          "id": 3
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "El pedido no existe o ya cambió de estado."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "comprobante para pedido B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/guardar_comprobante.php",
+        "carga": {
+          "pedido_id": 1,
+          "tipo": "simple",
+          "pagos": [
+            {
+              "metodo": "efectivo",
+              "monto": "10.00"
+            }
+          ]
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "El pedido no existe o ya cambió de estado."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "anular comprobante B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/anular_comprobante.php",
+        "carga": {
+          "comprobante_id": 1,
+          "motivo": "Prueba cruzada"
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "El comprobante no existe o ya está anulado."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "disponibilidad B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/cocina_disponibilidad.php",
+        "carga": {
+          "producto_id": 3,
+          "sin_stock": true
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Plato no encontrado o inactivo."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 2,
+      "nombre": "cerrar turno B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/cerrar_turno.php",
+        "carga": {
+          "turno_id": 16,
+          "reabrir": false
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "El turno ya cambió. Actualiza la vista de caja antes de cerrar."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 3,
+      "nombre": "opción B en pedido A",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/agregar_item.php",
+        "carga": {
+          "pedido_id": 2,
+          "operacion_id": "b803e88d302a02642da656541bbd5cfc",
+          "items": [
+            {
+              "producto_id": 1,
+              "cantidad": 1,
+              "selecciones": [
+                {
+                  "grupo_id": 3,
+                  "valor_id": 3
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Una opción ya no está disponible para este producto."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 3,
+      "nombre": "grupo B en producto A",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/admin_productos.php",
+        "carga": {
+          "accion": "editar",
+          "id": 1,
+          "categoria_id": 1,
+          "nombre": "Producto A 1 TEST",
+          "precio": 10,
+          "activo": 1,
+          "tiene_opciones": 1,
+          "grupos": [
+            {
+              "id": 3,
+              "nombre": "Grupo B 1 TEST",
+              "valores": [
+                "Valor B 1 TEST"
+              ]
+            }
+          ]
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Los grupos deben definirse sin identificadores ajenos."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 4,
+      "nombre": "cocina intenta cobrar",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/cobrar_pedido.php",
+        "carga": {
+          "pedido_id": 1,
+          "pagos": [
+            {
+              "metodo": "efectivo",
+              "monto": "10.00"
+            }
+          ]
+        }
+      },
+      "respuesta": {
+        "status": 403,
+        "success": false,
+        "message": "No autorizado"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 4,
+      "nombre": "encargado intenta reabrir",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/reabrir_venta.php",
+        "carga": {
+          "id": 1
+        }
+      },
+      "respuesta": {
+        "status": 403,
+        "success": false,
+        "message": "No autorizado"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 4,
+      "nombre": "encargado edita admin",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/admin_usuarios.php",
+        "carga": {
+          "accion": "editar",
+          "id": 2,
+          "nombre": "Admin A TEST",
+          "email": "admin.A@aislamiento.test",
+          "rol": "admin",
+          "activo": 1
+        }
+      },
+      "respuesta": {
+        "status": 403,
+        "success": false,
+        "message": "No tienes permiso para editar este usuario"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 5,
+      "nombre": "formulario obsoleto de A tras elegir B",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/roles/admin/gastos.php",
+        "carga": {
+          "csrf_token": "[oculto]",
+          "restaurante_esperado": "1",
+          "contexto_restaurante": "[oculto]",
+          "accion": "registrar",
+          "categoria": "Insumos",
+          "descripcion": "Pestaña antigua A",
+          "monto": "1.00",
+          "metodo_pago": "efectivo",
+          "fecha": "2026-11-19"
+        }
+      },
+      "respuesta": {
+        "status": 409,
+        "message": "El restaurante de esta pestaña cambió. Recarga la página antes de continuar."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 7,
+      "nombre": "guardar nota con HTML",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/agregar_item.php",
+        "carga": {
+          "pedido_id": 2,
+          "notas": "<img src=x onerror=alert(document.cookie)> \" '"
+        }
+      },
+      "respuesta": {
+        "status": 200,
+        "success": true,
+        "message": "Ítems añadidos correctamente."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 7,
+      "nombre": "nota A y lectura B rechazada",
+      "peticion": {
+        "metodo": "GET",
+        "ruta": "/api/get_pedido_detalle.php?id=2",
+        "carga": null
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Pedido no encontrado"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 7,
+      "nombre": "superadmin en B no lee nota A",
+      "peticion": {
+        "metodo": "GET",
+        "ruta": "/api/get_pedido_detalle.php?id=2",
+        "carga": null
+      },
+      "respuesta": {
+        "status": 200,
+        "success": false,
+        "message": "Pedido no encontrado"
+      },
+      "paso": true
+    },
+    {
+      "categoria": 6,
+      "nombre": "GET siguiente con sesión desactivada",
+      "peticion": {
+        "metodo": "GET",
+        "ruta": "/api/get_menu.php",
+        "carga": null
+      },
+      "respuesta": {
+        "status": 401,
+        "success": false,
+        "message": "La sesión ya no es válida. Vuelve a iniciar sesión."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 8,
+      "nombre": "apertura A simultánea",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/abrir_turno.php",
+        "carga": {}
+      },
+      "respuesta": {
+        "status": 200,
+        "success": true,
+        "message": "Caja abierta correctamente."
+      },
+      "paso": true
+    },
+    {
+      "categoria": 8,
+      "nombre": "apertura B simultánea",
+      "peticion": {
+        "metodo": "POST",
+        "ruta": "/api/abrir_turno.php",
+        "carga": {}
+      },
+      "respuesta": {
+        "status": 200,
+        "success": true,
+        "message": "Caja abierta correctamente."
+      },
+      "paso": true
+    }
+  ]
+}

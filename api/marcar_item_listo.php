@@ -44,7 +44,10 @@ try {
             WHERE pi.id = ? AND pe.restaurante_id = ?
         ");
         $stCheck->execute([$itemId, $restauranteId]);
-        if (!$stCheck->fetch()) continue; // ignorar IDs inválidos
+        if (!$stCheck->fetch()) {
+            $db->rollBack();
+            jsonResponse(false, null, 'Ítem no encontrado en este restaurante.');
+        }
 
         $st = $db->prepare("UPDATE pedido_items SET estado = ? WHERE id = ?");
         $st->execute([$estado, $itemId]);
