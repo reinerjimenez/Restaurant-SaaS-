@@ -296,6 +296,7 @@ CREATE TABLE `gastos` (
   `categoria` varchar(100) NOT NULL,
   `descripcion` varchar(255) NOT NULL,
   `monto` decimal(10,2) NOT NULL,
+  `metodo_pago` enum('efectivo','yape','transferencia','tarjeta','otro') DEFAULT NULL,
   `fecha` date NOT NULL,
   `activo` tinyint(1) DEFAULT 1,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),

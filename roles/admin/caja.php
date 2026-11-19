@@ -320,7 +320,7 @@ require_once '../../includes/header.php';
     <!-- Totales del turno actual -->
     <div class="card mb-24">
         <div class="card-title"><i class="fa-solid fa-coins"></i> Totales del Turno Actual</div>
-        <p style="margin-bottom:12px;color:var(--text-secondary);">Los cobros netos incluyen los reversos de este turno. Los gastos se muestran por turno de registro.</p>
+        <p style="margin-bottom:12px;color:var(--text-secondary);">Saldo por método: cobros después de reversos menos gastos del turno de registro.</p>
 
         <div class="caja-totales-grid">
             <?php
@@ -332,17 +332,24 @@ require_once '../../includes/header.php';
                 'total_otros'         => ['fa-rotate',           'Otros',          '#6b7280'],
             ];
             foreach ($metodoInfo as $campo => [$icon, $label, $color]):
-                $monto = floatval($turnoActivo[$campo] ?? 0);
+                $metodo = $campo === 'total_otros' ? 'otro' : substr($campo, 6);
+                $cobros = centimos_reporte($turnoActivo[$campo] ?? '0');
+                $gastos = centimos_reporte($turnoActivo['gastos_por_metodo'][$metodo] ?? '0');
             ?>
             <div class="caja-metodo-card">
                 <div class="metodo-icon" style="color:<?= $color ?>;">
                     <i class="fa-solid <?= $icon ?>"></i>
                 </div>
-                <div class="metodo-monto">S/ <?= number_format($monto, 2) ?></div>
-                <div class="metodo-label"><?= $label ?></div>
+                <div class="metodo-monto">S/ <?= number_format(($cobros - $gastos) / 100, 2) ?></div>
+                <div class="metodo-label"><?= $label ?> · Saldo</div>
+                <div class="metodo-label">Cobros S/ <?= number_format($cobros / 100, 2) ?> · Gastos S/ <?= number_format($gastos / 100, 2) ?></div>
             </div>
             <?php endforeach; ?>
         </div>
+
+        <?php if (centimos_reporte($turnoActivo['gastos_sin_especificar'] ?? '0') > 0): ?>
+        <p style="margin-top:12px;color:var(--text-secondary);">Gastos sin método: S/ <?= number_format($turnoActivo['gastos_sin_especificar'], 2) ?>. Se descuentan del saldo general.</p>
+        <?php endif; ?>
 
         <div class="caja-total-general">
             <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:32px;">

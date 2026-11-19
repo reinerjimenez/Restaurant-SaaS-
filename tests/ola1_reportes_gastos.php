@@ -169,18 +169,19 @@ $bloqueos = [
     paso_reporte(['FROM turnos', 'fin IS NULL', 'FOR UPDATE'], [7], [['id' => 5]]),
 ];
 $gasto = ['accion' => 'registrar', 'categoria' => 'Insumos', 'descripcion' => 'Material', 'monto' => '12.25', 'fecha' => '2026-11-10'];
-$guardar = paso_reporte(['INSERT INTO gastos', 'turno_id'], [7, 9, 5, 'Insumos', 'Material', '12.25', '2026-11-10']);
+$gasto['metodo_pago'] = 'yape';
+$guardar = paso_reporte(['INSERT INTO gastos', 'turno_id', 'metodo_pago'], [7, 9, 5, 'Insumos', 'Material', '12.25', '2026-11-10', 'yape']);
 $db = new ConexionReportePrueba([...$bloqueos, $guardar]);
 verificar_reporte(guardar_gasto($db, 7, 9, 'admin', $gasto) === 'Gasto registrado.', 'Alta de gasto fallida.');
 verificar_reporte($db->eventos[0] === 'begin' && str_contains($db->eventos[1], 'Gasto #51, turno #5')
     && $db->eventos[2] === 'commit' && !$db->pasos, 'Alta no audita antes de confirmar.');
 
 $buscar_gasto = paso_reporte(['FROM gastos', 'turno_id = ?', 'FOR UPDATE'], [51, 7, 5],
-    [['monto' => '12.25', 'fecha' => '2026-11-10']]);
+    [['monto' => '12.25', 'fecha' => '2026-11-10', 'metodo_pago' => 'yape']]);
 $db = new ConexionReportePrueba([...$bloqueos, $buscar_gasto,
-    paso_reporte(['UPDATE gastos SET categoria'], ['Insumos', 'Material', '10.00', '2026-11-10', 51, 7, 5]),
+    paso_reporte(['UPDATE gastos SET categoria', 'metodo_pago = ?'], ['Insumos', 'Material', '10.00', '2026-11-10', 'tarjeta', 51, 7, 5]),
 ]);
-guardar_gasto($db, 7, 9, 'admin', array_replace($gasto, ['accion' => 'editar', 'id' => '51', 'monto' => '10.00']));
+guardar_gasto($db, 7, 9, 'admin', array_replace($gasto, ['accion' => 'editar', 'id' => '51', 'monto' => '10.00', 'metodo_pago' => 'tarjeta']));
 verificar_reporte(str_contains($db->eventos[1], '12.25 → S/ 10.00') && $db->eventos[2] === 'commit', 'Edición sin ambos importes.');
 
 $db = new ConexionReportePrueba([...$bloqueos, $buscar_gasto,
@@ -214,5 +215,34 @@ foreach ([['encargado', null], ['admin', $inicio]] as [$rol, $fecha_fija]) {
         verificar_reporte($db->eventos === [], 'Una operación no permitida no debe abrir una transacción.');
     }
 }
+
+// El método inválido se rechaza antes de abrir la transacción.
+$db = new ConexionReportePrueba([]);
+try {
+    guardar_gasto($db, 7, 9, 'admin', array_replace($gasto, ['metodo_pago' => 'banco']));
+    throw new LogicException('Se esperaba rechazo del método inválido.');
+} catch (DomainException $error) {
+    verificar_reporte($db->eventos === [], 'El método inválido no debe iniciar escritura.');
+}
+
+$db = new ConexionReportePrueba([paso_reporte(['GROUP BY metodo_pago', 'activo = 1'], [7, $inicio, $fin], [
+    ['metodo_pago' => 'yape', 'total' => '12.25'],
+    ['metodo_pago' => null, 'total' => '3.00'],
+])]);
+verificar_reporte(gastos_por_metodo_periodo($db, 7, $inicio, $fin) ===
+    ['yape' => '12.25', 'sin_especificar' => '3.00'], 'El gasto histórico no debe atribuirse a un método.');
+
+$db = new ConexionReportePrueba([
+    paso_reporte(['g.metodo_pago', 'GROUP BY g.usuario_id, g.metodo_pago'], [5, 7, 5, 7, 5, 7], [
+        ['usuario_id' => 9, 'usuario' => 'Caja', 'clase' => 'pago', 'metodo' => 'yape', 'monto' => '20.00', 'cantidad' => 1],
+        ['usuario_id' => 9, 'usuario' => 'Caja', 'clase' => 'gasto', 'metodo' => 'yape', 'monto' => '12.25', 'cantidad' => 1],
+        ['usuario_id' => 9, 'usuario' => 'Caja', 'clase' => 'gasto', 'metodo' => null, 'monto' => '3.00', 'cantidad' => 1],
+    ]),
+    paso_reporte(['COUNT(DISTINCT p.pedido_id)'], [5, 7], [['total' => 1]]),
+]);
+$resumen = resumen_turno($db, 7, 5);
+verificar_reporte($resumen['total_yape'] === '20.00' && $resumen['gastos_por_metodo']['yape'] === '12.25'
+    && $resumen['saldos_por_metodo']['yape'] === '7.75' && $resumen['gastos_sin_especificar'] === '3.00'
+    && $resumen['total_gastos'] === '15.25', 'El saldo del turno no concilia por método.');
 
 echo "OK H-001, H-002, H-022 y H-015: contratos, fechas, totales y gastos con PDO simulado.\n";

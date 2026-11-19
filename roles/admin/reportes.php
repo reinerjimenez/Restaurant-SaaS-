@@ -21,6 +21,7 @@ $ventasMetodos = $periodo['metodos'];
 $ventasProds = productos_periodo($db, $restauranteId, $fechaInicio, $fin_exclusivo, 20);
 $totalGeneral = $periodo['total_centimos'] / 100;
 $totalGastos = gastos_contables_periodo($db, $restauranteId, $fechaInicio, $fin_exclusivo);
+$gastosMetodos = gastos_por_metodo_periodo($db, $restauranteId, $fechaInicio, $fin_exclusivo);
 $utilidadNeta = ($periodo['total_centimos'] - centimos_reporte($totalGastos)) / 100;
 
 $pageTitle  = 'Reportes';
@@ -91,14 +92,20 @@ require_once '../../includes/header.php';
                     ['tarjeta','fa-credit-card','Tarjeta'],
                     ['otro','fa-rotate','Otro'],
                 ];
-                foreach ($metodos2 as [$key,$icon,$label]): ?>
+                foreach ($metodos2 as [$key,$icon,$label]):
+                    $cobrosMetodo = centimos_reporte($metodoMap2[$key] ?? '0');
+                    $gastosMetodo = centimos_reporte($gastosMetodos[$key] ?? '0'); ?>
                 <div class="stat-card naranja">
                     <div class="stat-icon"><i class="fa-solid <?= $icon ?>"></i></div>
-                    <div class="stat-valor">S/ <?= number_format($metodoMap2[$key] ?? 0, 2) ?></div>
-                    <div class="stat-label"><?= $label ?></div>
+                    <div class="stat-valor">S/ <?= number_format(($cobrosMetodo - $gastosMetodo) / 100, 2) ?></div>
+                    <div class="stat-label"><?= $label ?> · Saldo</div>
+                    <div class="stat-label">Cobros S/ <?= number_format($cobrosMetodo / 100, 2) ?> · Gastos S/ <?= number_format($gastosMetodo / 100, 2) ?></div>
                 </div>
                 <?php endforeach; ?>
             </div>
+            <?php if (centimos_reporte($gastosMetodos['sin_especificar'] ?? '0') > 0): ?>
+            <p class="card mb-24">Gastos anteriores sin método de pago: S/ <?= number_format($gastosMetodos['sin_especificar'], 2) ?>. Se descuentan del saldo general, pero no de un método específico.</p>
+            <?php endif; ?>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
                 <!-- Ventas por día -->

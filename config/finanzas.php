@@ -214,10 +214,10 @@ function resumen_turno(PDO $db, int $restaurante_id, int $turno_id): array {
             WHERE r.turno_id = ? AND pe.restaurante_id = ?
             GROUP BY r.usuario_id, p.metodo
             UNION ALL
-            SELECT g.usuario_id, 'gasto', NULL, SUM(g.monto), COUNT(*)
+            SELECT g.usuario_id, 'gasto', g.metodo_pago, SUM(g.monto), COUNT(*)
             FROM gastos g
             WHERE g.turno_id = ? AND g.restaurante_id = ? AND g.activo = 1
-            GROUP BY g.usuario_id
+            GROUP BY g.usuario_id, g.metodo_pago
         ) m LEFT JOIN usuarios u ON u.id = m.usuario_id
         ORDER BY m.usuario_id
     ");
@@ -226,6 +226,8 @@ function resumen_turno(PDO $db, int $restaurante_id, int $turno_id): array {
         'tarjeta' => 'total_tarjeta', 'otro' => 'total_otros'];
     $base = array_fill_keys(array_values($por_metodo), 0) + ['total_general' => 0, 'total_gastos' => 0];
     $totales = $base + ['total_reversos' => 0];
+    $gastos_metodos = array_fill_keys(array_keys($por_metodo), 0);
+    $gastos_sin_especificar = 0;
     $usuarios = [];
     $num_reversos = 0;
     foreach ($stmt->fetchAll() as $fila) {
@@ -237,6 +239,11 @@ function resumen_turno(PDO $db, int $restaurante_id, int $turno_id): array {
         if ($fila['clase'] === 'gasto') {
             $totales['total_gastos'] += $monto;
             $usuarios[$id]['total_gastos'] += $monto;
+            if (isset($gastos_metodos[$fila['metodo'] ?? ''])) {
+                $gastos_metodos[$fila['metodo']] += $monto;
+            } else {
+                $gastos_sin_especificar += $monto;
+            }
         } else {
             if ($fila['clase'] === 'reverso') {
                 $totales['total_reversos'] += $monto;
@@ -259,7 +266,15 @@ function resumen_turno(PDO $db, int $restaurante_id, int $turno_id): array {
     $num_pedidos = $db->prepare('SELECT COUNT(DISTINCT p.pedido_id) FROM pagos p JOIN pedidos pe ON pe.id = p.pedido_id
         WHERE p.turno_id = ? AND pe.restaurante_id = ?');
     $num_pedidos->execute([$turno_id, $restaurante_id]);
+    $saldos_metodos = [];
+    foreach ($por_metodo as $metodo => $clave) {
+        $saldos_metodos[$metodo] = decimal_centimos($totales[$clave] - $gastos_metodos[$metodo]);
+    }
+    $gastos_metodos = array_map('decimal_centimos', $gastos_metodos);
     return array_map('decimal_centimos', $totales) + [
+        'gastos_por_metodo' => $gastos_metodos,
+        'gastos_sin_especificar' => decimal_centimos($gastos_sin_especificar),
+        'saldos_por_metodo' => $saldos_metodos,
         'num_pedidos' => (int)$num_pedidos->fetchColumn(),
         'num_reversos' => $num_reversos,
         'desglose_usuarios' => array_values($usuarios),

@@ -87,7 +87,7 @@ require_once '../../includes/header.php';
 
     <div class="card mb-24" style="padding:16px;">
         <div style="font-size:.85rem;font-weight:700;color:var(--text-primary);margin-bottom:12px;display:flex;align-items:center;gap:6px;">
-            <i class="fa-solid fa-credit-card"></i> Ingresos por método de pago (General)
+            <i class="fa-solid fa-credit-card"></i> <?= isset($cierre['gastos_por_metodo']) ? 'Saldo por método de pago' : 'Ingresos por método de pago (desglose de gastos no disponible)' ?>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:12px;">
             <?php
@@ -99,15 +99,23 @@ require_once '../../includes/header.php';
                 'total_otros'         => ['Otro', 'fa-wallet']
             ];
             foreach ($listaMetodos as $k => $m):
-                $val = floatval($turno[$k]);
+                $metodo = $k === 'total_otros' ? 'otro' : substr($k, 6);
+                $cobros = centimos_reporte($turno[$k]);
+                $gastos = isset($cierre['gastos_por_metodo']) ? centimos_reporte($cierre['gastos_por_metodo'][$metodo] ?? '0') : 0;
             ?>
             <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center;">
                 <i class="fa-solid <?= $m[1] ?>" style="color:var(--text-secondary);font-size:1.2rem;margin-bottom:6px;"></i>
-                <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary);">S/ <?= number_format($val, 2) ?></div>
-                <div style="font-size:.75rem;color:var(--text-muted);"><?= $m[0] ?></div>
+                <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary);">S/ <?= number_format(($cobros - $gastos) / 100, 2) ?></div>
+                <div style="font-size:.75rem;color:var(--text-muted);"><?= $m[0] ?><?= isset($cierre['gastos_por_metodo']) ? ' · Saldo' : ' · Cobros' ?></div>
+                <?php if (isset($cierre['gastos_por_metodo'])): ?>
+                <div style="font-size:.75rem;color:var(--text-muted);">Cobros S/ <?= number_format($cobros / 100, 2) ?> · Gastos S/ <?= number_format($gastos / 100, 2) ?></div>
+                <?php endif; ?>
             </div>
             <?php endforeach; ?>
         </div>
+        <?php if (isset($cierre['gastos_sin_especificar']) && centimos_reporte($cierre['gastos_sin_especificar']) > 0): ?>
+        <p style="margin-top:12px;color:var(--text-secondary);">Gastos sin método: S/ <?= number_format($cierre['gastos_sin_especificar'], 2) ?>. Se descuentan del saldo general.</p>
+        <?php endif; ?>
     </div>
 
     <div class="card">

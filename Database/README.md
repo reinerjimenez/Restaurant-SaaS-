@@ -1,5 +1,9 @@
 # SQL de MESORA
 
+## Gastos por método de pago
+
+En una instalación existente, ejecuta manualmente `010_metodo_pago_gastos.sql` después de respaldar la base y antes de probar el registro de gastos o los reportes actualizados. Los gastos anteriores quedarán sin método especificado. La migración 010 es independiente de la 009; aplica ambas si necesitas también disponibilidad de productos. En una instalación nueva, utiliza únicamente el instalador 008 actualizado.
+
 ## Instalación nueva
 
 Importa **solo** [008_mesora_instalacion_oficial.sql](008_mesora_instalacion_oficial.sql) en la base MariaDB `mesora`, nueva y vacía, seleccionada en phpMyAdmin. El archivo contiene el esquema completo de Ola 0 y Ola 1, InnoDB, claves foráneas, límites de login y un único superadmin. No contiene restaurantes, pedidos, pagos ni otros datos de demostración. El preflight bloquea la ejecución si la base seleccionada no se llama `mesora` o ya contiene tablas.

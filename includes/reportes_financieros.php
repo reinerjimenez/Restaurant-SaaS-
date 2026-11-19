@@ -80,6 +80,20 @@ function gastos_contables_periodo(PDO $db, int $restaurante_id, string $inicio, 
     return (string)$consulta->fetchColumn();
 }
 
+function gastos_por_metodo_periodo(PDO $db, int $restaurante_id, string $inicio, string $fin): array {
+    $filas = consultar_filas_reporte($db, '
+        SELECT metodo_pago, COALESCE(SUM(monto), 0) AS total
+        FROM gastos
+        WHERE restaurante_id = ? AND activo = 1 AND fecha >= ? AND fecha < ?
+        GROUP BY metodo_pago
+    ', [$restaurante_id, $inicio, $fin]);
+    $resultado = [];
+    foreach ($filas as $fila) {
+        $resultado[$fila['metodo_pago'] ?? 'sin_especificar'] = (string)$fila['total'];
+    }
+    return $resultado;
+}
+
 function mesas_del_turno(PDO $db, int $restaurante_id, int $turno_id): array {
     $filas = consultar_filas_reporte($db, '
         SELECT DISTINCT p.id, m.numero

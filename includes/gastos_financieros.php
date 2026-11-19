@@ -26,6 +26,10 @@ function guardar_gasto(PDO $db, int $restaurante_id, int $usuario_id, string $ro
         $descripcion = is_string($entrada['descripcion'] ?? null) ? trim($entrada['descripcion']) : '';
         $fecha = $fecha_fija ?? fecha_reporte($entrada['fecha'] ?? null, '');
         $centimos = importe_centimos($entrada['monto'] ?? null);
+        $metodo_pago = $entrada['metodo_pago'] ?? null;
+        if (!in_array($metodo_pago, METODOS_PAGO, true)) {
+            throw new DomainException('Selecciona un método de pago válido.');
+        }
         if ($categoria === '' || mb_strlen($categoria, 'UTF-8') > 100
             || $descripcion === '' || mb_strlen($descripcion, 'UTF-8') > 255
             || $fecha === '' || $centimos <= 0) {
@@ -44,17 +48,17 @@ function guardar_gasto(PDO $db, int $restaurante_id, int $usuario_id, string $ro
         $turno_id = (int)$turno['id'];
         if ($accion === 'registrar') {
             $consulta = $db->prepare("
-                INSERT INTO gastos (restaurante_id, usuario_id, turno_id, categoria, descripcion, monto, fecha)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO gastos (restaurante_id, usuario_id, turno_id, categoria, descripcion, monto, fecha, metodo_pago)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            $consulta->execute([$restaurante_id, $usuario_id, $turno_id, $categoria, $descripcion, $monto, $fecha]);
+            $consulta->execute([$restaurante_id, $usuario_id, $turno_id, $categoria, $descripcion, $monto, $fecha, $metodo_pago]);
             $gasto_id = (int)$db->lastInsertId();
             $evento = 'Registró gasto';
-            $detalle = "S/ 0.00 → S/ $monto. Fecha contable: $fecha.";
+            $detalle = "S/ 0.00 → S/ $monto. Fecha contable: $fecha. Método: $metodo_pago.";
             $mensaje = 'Gasto registrado.';
         } else {
             $consulta = $db->prepare("
-                SELECT monto, fecha FROM gastos
+                SELECT monto, fecha, metodo_pago FROM gastos
                 WHERE id = ? AND restaurante_id = ? AND turno_id = ? AND activo = 1
                 FOR UPDATE
             ");
@@ -65,18 +69,20 @@ function guardar_gasto(PDO $db, int $restaurante_id, int $usuario_id, string $ro
             }
             if ($accion === 'editar') {
                 $consulta = $db->prepare("
-                    UPDATE gastos SET categoria = ?, descripcion = ?, monto = ?, fecha = ?
+                    UPDATE gastos SET categoria = ?, descripcion = ?, monto = ?, fecha = ?, metodo_pago = ?
                     WHERE id = ? AND restaurante_id = ? AND turno_id = ?
                 ");
-                $consulta->execute([$categoria, $descripcion, $monto, $fecha, $gasto_id, $restaurante_id, $turno_id]);
+                $consulta->execute([$categoria, $descripcion, $monto, $fecha, $metodo_pago, $gasto_id, $restaurante_id, $turno_id]);
                 $evento = 'Editó gasto';
-                $detalle = "S/ {$anterior['monto']} → S/ $monto. Fecha contable: {$anterior['fecha']} → $fecha.";
+                $detalle = "S/ {$anterior['monto']} → S/ $monto. Fecha contable: {$anterior['fecha']} → $fecha. Método: "
+                    . ($anterior['metodo_pago'] ?? 'sin especificar') . " → $metodo_pago.";
                 $mensaje = 'Gasto actualizado.';
             } else {
                 $consulta = $db->prepare("UPDATE gastos SET activo = 0 WHERE id = ? AND restaurante_id = ? AND turno_id = ?");
                 $consulta->execute([$gasto_id, $restaurante_id, $turno_id]);
                 $evento = 'Anuló gasto';
-                $detalle = "S/ {$anterior['monto']} → S/ 0.00. Fecha contable: {$anterior['fecha']}. Motivo: $motivo.";
+                $detalle = "S/ {$anterior['monto']} → S/ 0.00. Fecha contable: {$anterior['fecha']}. Método: "
+                    . ($anterior['metodo_pago'] ?? 'sin especificar') . ". Motivo: $motivo.";
                 $mensaje = 'Gasto anulado. Se conserva su registro.';
             }
         }
