@@ -5,6 +5,7 @@
 require_once '../config/db.php';
 requireRole(['admin', 'superadmin']);
 require_once '../config/finanzas.php';
+require_once '../includes/emision_fiscal.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
@@ -21,6 +22,7 @@ try {
     bloquear_restaurante($db, $restaurante_id);
     $turno = exigir_turno_abierto($db, $restaurante_id);
     $pedido = bloquear_pedido($db, $restaurante_id, $pedido_id, 'cobrado');
+    fiscal_exigir_venta_modificable($db, $restaurante_id, $pedido_id);
     $motivo = 'Venta cancelada desde historial';
     $reverso = revertir_pagos($db, $pedido, (int)$turno['id'], $usuario_id, $motivo);
 

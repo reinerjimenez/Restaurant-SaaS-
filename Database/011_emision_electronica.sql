@@ -1,0 +1,52 @@
+-- Ejecutar manualmente tras respaldo. No modifica cobros ni comprobantes históricos.
+-- Producción requiere homologación y habilitación individual también en el entorno del servidor.
+CREATE TABLE emision_config (
+ restaurante_id int(11) NOT NULL,
+ modo enum('desactivado','pruebas','produccion') NOT NULL DEFAULT 'desactivado',
+ ruc varchar(11) NOT NULL DEFAULT '',
+ razon_social varchar(200) NOT NULL DEFAULT '',
+ direccion varchar(300) NOT NULL DEFAULT '',
+ ubigeo varchar(6) NOT NULL DEFAULT '',
+ regimen enum('RER','RMT','GENERAL') NOT NULL DEFAULT 'RER',
+ tasa_igv decimal(5,2) NOT NULL DEFAULT 18.00,
+ serie_boleta varchar(4) NOT NULL DEFAULT 'B001',
+ serie_factura varchar(4) NOT NULL DEFAULT 'F001',
+ correlativo_boleta int unsigned NOT NULL DEFAULT 0,
+ correlativo_factura int unsigned NOT NULL DEFAULT 0,
+ correlativo_boleta_pruebas int unsigned NOT NULL DEFAULT 0,
+ correlativo_factura_pruebas int unsigned NOT NULL DEFAULT 0,
+ updated_at timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (restaurante_id),
+ CONSTRAINT fk_emision_config_restaurante FOREIGN KEY (restaurante_id) REFERENCES restaurantes(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE emision_documentos (
+ id bigint unsigned NOT NULL AUTO_INCREMENT,
+ restaurante_id int(11) NOT NULL,
+ pedido_id int(11) NOT NULL,
+ usuario_id int(11) NOT NULL,
+ ambiente enum('pruebas','produccion') NOT NULL DEFAULT 'pruebas',
+ tipo enum('boleta','factura') NOT NULL,
+ serie varchar(4) NOT NULL,
+ correlativo int unsigned NOT NULL,
+ estado enum('pendiente','procesando','pendiente_ticket','incierto','aceptado','aceptado_observado','rechazado','prueba_aceptada','error') NOT NULL DEFAULT 'pendiente',
+ snapshot_json longtext NOT NULL CHECK (json_valid(snapshot_json)),
+ xml_firmado longtext DEFAULT NULL,
+ resumen_xml_firmado longtext DEFAULT NULL,
+ cdr_xml longtext DEFAULT NULL,
+ ticket varchar(100) DEFAULT NULL,
+ resumen_identidad varchar(64) DEFAULT NULL,
+ respuesta_codigo varchar(20) DEFAULT NULL,
+ respuesta_mensaje varchar(500) DEFAULT NULL,
+ intentos int unsigned NOT NULL DEFAULT 0,
+ created_at timestamp NOT NULL DEFAULT current_timestamp(),
+ updated_at timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (id),
+ UNIQUE KEY uk_emision_pedido (restaurante_id,pedido_id,ambiente),
+ UNIQUE KEY uk_emision_numero (restaurante_id,ambiente,serie,correlativo),
+ UNIQUE KEY uk_emision_resumen (restaurante_id,ambiente,resumen_identidad),
+ KEY idx_emision_pendiente (restaurante_id,estado,id),
+ CONSTRAINT fk_emision_documentos_restaurante FOREIGN KEY (restaurante_id) REFERENCES restaurantes(id),
+ CONSTRAINT fk_emision_documentos_pedido FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
+ CONSTRAINT fk_emision_documentos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

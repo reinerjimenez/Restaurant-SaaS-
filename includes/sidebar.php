@@ -45,6 +45,7 @@ if ($rol === 'superadmin') {
             <li><a href="<?= BASE_URL ?>/roles/superadmin/perfil.php"><span class="menu-icon"><i class="fa-solid fa-user-shield"></i></span> Mi Perfil</a></li>
             <?php if (!empty($_SESSION['restaurante_id'])): ?>
             <li><a href="<?= BASE_URL ?>/roles/admin/auditoria.php"><span class="menu-icon"><i class="fa-solid fa-shield-halved"></i></span> Auditoría</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/emision_electronica.php"><span class="menu-icon"><i class="fa-solid fa-file-invoice"></i></span> Emisión electrónica</a></li>
             <?php endif; ?>
 
         <?php elseif ($rol === 'admin'): ?>
@@ -60,6 +61,7 @@ if ($rol === 'superadmin') {
             <li><a href="<?= BASE_URL ?>/roles/admin/historial_comprobantes.php"><span class="menu-icon"><i class="fa-solid fa-file-invoice"></i></span> Comprobantes</a></li>
             <li><a href="<?= BASE_URL ?>/roles/admin/caja.php"><span class="menu-icon"><i class="fa-solid fa-cash-register"></i></span> Caja</a></li>
             <li><a href="<?= BASE_URL ?>/roles/admin/config_facturacion.php"><span class="menu-icon"><i class="fa-solid fa-store"></i></span> Mi Restaurante</a></li>
+            <li><a href="<?= BASE_URL ?>/roles/admin/emision_electronica.php"><span class="menu-icon"><i class="fa-solid fa-file-invoice"></i></span> Emisión electrónica</a></li>
 
         <?php elseif ($rol === 'encargado'): ?>
             <li><a href="<?= BASE_URL ?>/roles/admin/dashboard.php"><span class="menu-icon"><i class="fa-solid fa-chart-bar"></i></span> Dashboard</a></li>

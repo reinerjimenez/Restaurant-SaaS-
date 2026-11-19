@@ -104,6 +104,7 @@ require_once '../../includes/header.php';
             <!-- TICKET COMPROBANTE -->
             <div id="comprobante-print-root">
             <div class="ticket-wrapper">
+                <p role="note" style="text-align:center;font-weight:700;border:2px solid currentColor;padding:8px;">DOCUMENTO INTERNO — SIN VALIDEZ TRIBUTARIA<br>No acredita emisión ni aceptación de SUNAT.</p>
 
                 <?php if ($comp['anulado']): ?>
                 <div class="ticket-anulado-banner">★ ANULADO ★</div>

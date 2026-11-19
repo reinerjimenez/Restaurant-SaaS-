@@ -5,18 +5,23 @@
 require_once '../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 require_once '../config/finanzas.php';
+require_once '../includes/emision_fiscal.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
 $input = json_decode($GLOBALS['_RAW_INPUT'] ?? file_get_contents('php://input'), true);
 $pedido_id = filter_var($input['pedido_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 $tipo = $input['tipo'] ?? '';
+// Este endpoint solo registra documentos internos; la emisión fiscal usa su propio flujo.
+$es_fiscal_pruebas = in_array($tipo, ['boleta', 'factura'], true) && ($input['preparar_emision'] ?? false) === true;
+if (in_array($tipo, ['boleta', 'factura'], true) && !$es_fiscal_pruebas) {
+    http_response_code(409);
+    jsonResponse(false, null, 'La emisión SUNAT no está habilitada en este flujo. Usa Emisión electrónica para preparar el documento fiscal. El pedido no fue cobrado.');
+}
 $series = [
-    'factura' => ['correlativo_factura', 'serie_factura', 'F001'],
-    'boleta' => ['correlativo_boleta', 'serie_boleta', 'B001'],
     'simple' => ['correlativo_simple', 'serie_simple', 'T001'],
 ];
-if (!$pedido_id || !is_string($tipo) || !isset($series[$tipo])) {
+if (!$pedido_id || !is_string($tipo) || (!isset($series[$tipo]) && !$es_fiscal_pruebas)) {
     jsonResponse(false, null, 'Pedido o tipo de comprobante inválido.');
 }
 $campos = ['tipo_documento' => 3, 'numero_documento' => 11, 'nombre_cliente' => 200,
@@ -48,6 +53,25 @@ try {
     $turno = exigir_turno_abierto($db, $restaurante_id);
     $pedido = bloquear_pedido($db, $restaurante_id, $pedido_id, 'activo');
     [$total, $descuento, $cargo_extra] = calcular_cobro($db, $pedido, $input, $pagos);
+
+    if ($es_fiscal_pruebas) {
+        if (!emision_esquema_disponible($db)) throw new DomainException('Emisión de ensayo no instalada. El cobro no se realizó.');
+        $stModo = $db->prepare('SELECT modo FROM emision_config WHERE restaurante_id = ? FOR UPDATE');
+        $stModo->execute([$restaurante_id]);
+        $modo_emision = $stModo->fetchColumn();
+        if (!in_array($modo_emision, ['pruebas','produccion'], true)) throw new DomainException('La emisión de este restaurante está desactivada. El pedido no fue cobrado.');
+        persistir_cobro($db, $restaurante_id, (int)$turno['id'], $usuario_id, $pedido, $pagos, $total,
+            $descuento, $cargo_extra, $datos['notas']);
+        $emision_id = emision_solicitar($db, $restaurante_id, $usuario_id, [
+            'pedido_id' => $pedido_id, 'tipo' => $tipo, 'tipo_documento' => $tipo_documento,
+            'numero_documento' => $numero_documento, 'nombre' => $datos['nombre_cliente'], 'direccion' => $datos['direccion'],
+        ]);
+        registrarAuditoria($db, 'Cobró y preparó emisión', "Pedido #$pedido_id · Emisión #$emision_id · $modo_emision · Pendiente de procesamiento", true);
+        $db->commit();
+        jsonResponse(true, ['emision_id' => $emision_id, 'total_cobrado' => decimal_centimos($total)],
+            $modo_emision === 'pruebas' ? 'Cobro registrado y documento de ensayo preparado. Sin validez tributaria; no se envió a SUNAT.'
+                : 'Cobro registrado. Emisión pendiente de envío y aceptación SUNAT.');
+    }
 
     $stmt = $db->prepare('SELECT * FROM facturacion_config WHERE restaurante_id = ? FOR UPDATE');
     $stmt->execute([$restaurante_id]);
@@ -94,7 +118,7 @@ try {
     $db->commit();
     jsonResponse(true, [
         'comprobante_id' => $comprobante_id, 'numero_comprobante' => $numero, 'tipo' => $tipo, 'total_cobrado' => $monto,
-    ], '¡Comprobante emitido y cobro registrado!');
+    ], 'Documento interno registrado y cobro realizado. Sin validez tributaria.');
 } catch (Throwable $e) {
     error_financiero($db, $e, 'Error al guardar el comprobante');
 }

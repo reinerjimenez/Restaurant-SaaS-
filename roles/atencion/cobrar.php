@@ -6,6 +6,7 @@
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 require_once '../../config/finanzas.php';
+require_once '../../includes/emision_fiscal.php';
 
 $restauranteId = $_SESSION['restaurante_id'];
 $pedidoId = (int)($_GET['pedido_id'] ?? 0);
@@ -13,6 +14,15 @@ $pedidoId = (int)($_GET['pedido_id'] ?? 0);
 if (!$pedidoId) { header('Location: dashboard.php'); exit; }
 
 $db = getDB();
+$emisionPruebas = false;
+$emisionProduccion = false;
+if (emision_esquema_disponible($db)) {
+    $stEmision = $db->prepare('SELECT modo FROM emision_config WHERE restaurante_id = ?');
+    $stEmision->execute([(int)$restauranteId]);
+    $modoEmision = $stEmision->fetchColumn();
+    $emisionPruebas = $modoEmision === 'pruebas';
+    $emisionProduccion = $modoEmision === 'produccion' && emision_produccion_autorizada((int)$restauranteId);
+}
 
 $stPed = $db->prepare("
     SELECT pe.*, m.numero AS mesa_numero
@@ -101,18 +111,21 @@ require_once '../../includes/header.php';
                 <i class="fa-solid fa-file-lines" style="font-size:1.1rem;color:var(--text-secondary);"></i>
                 <span class="metodo-nombre">Comprobante Simple</span>
             </label>
-       <!-- <label id="opc-boleta-label" class="metodo-item" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--radius-md);border:2px solid var(--border);transition:all .2s;" onclick="seleccionarTipoComp('boleta')">
+            <?php if ($emisionPruebas || $emisionProduccion): ?>
+            <p role="note"><?= $emisionPruebas ? 'Modo de ensayo: se registra el cobro real, pero el documento preparado no se envía a SUNAT ni tiene validez tributaria.' : 'La emisión queda pendiente hasta que el procesador confirme la aceptación SUNAT.' ?></p>
+            <label id="opc-boleta-label" class="metodo-item" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--radius-md);border:2px solid var(--border);transition:all .2s;" onclick="seleccionarTipoComp('boleta')">
                 <input type="radio" name="tipo_comp" value="boleta" id="opc-boleta" style="display:none;">
                 <div class="metodo-check" id="check-comp-boleta"><i class="fa-solid fa-check"></i></div>
                 <i class="fa-solid fa-receipt" style="font-size:1.1rem;color:var(--text-secondary);"></i>
-                <span class="metodo-nombre">Boleta de Venta <span style="font-size:.78rem;color:var(--text-muted);">(DNI)</span></span>
+                <span class="metodo-nombre">Boleta <?= $emisionPruebas ? 'de ensayo' : 'electrónica' ?> <span style="font-size:.78rem;color:var(--text-muted);">(DNI)</span></span>
             </label>
             <label id="opc-factura-label" class="metodo-item" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--radius-md);border:2px solid var(--border);transition:all .2s;" onclick="seleccionarTipoComp('factura')">
                 <input type="radio" name="tipo_comp" value="factura" id="opc-factura" style="display:none;">
                 <div class="metodo-check" id="check-comp-factura"><i class="fa-solid fa-check"></i></div>
                 <i class="fa-solid fa-file-contract" style="font-size:1.1rem;color:var(--text-secondary);"></i>
-                <span class="metodo-nombre">Factura <span style="font-size:.78rem;color:var(--text-muted);">(RUC)</span></span>
-            </label> -->
+                <span class="metodo-nombre">Factura <?= $emisionPruebas ? 'de ensayo' : 'electrónica' ?> <span style="font-size:.78rem;color:var(--text-muted);">(RUC)</span></span>
+            </label>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -241,6 +254,7 @@ require_once '../../includes/header.php';
 <script>
 const SUBTOTAL_CENTIMOS = <?= $subtotal_centimos ?>;
 const PEDIDO_ID    = <?= $pedidoId ?>;
+const CSRF_TOKEN   = <?= json_encode(getCsrfToken(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 const METODOS      = ['efectivo','yape','transferencia','tarjeta','otro'];
 const activos      = new Set();
 
@@ -499,10 +513,12 @@ async function confirmarCobro() {
             const body = {
                 pedido_id: PEDIDO_ID,
                 tipo:      tipoComp,
+                preparar_emision: ['boleta', 'factura'].includes(tipoComp),
                 pagos,
                 notas: document.getElementById('notas-cobro').value,
                 descuento,
                 cargo_extra,
+                csrf_token: CSRF_TOKEN,
                 ...clienteData,
             };
 
@@ -517,7 +533,9 @@ async function confirmarCobro() {
                 Toast.exito(`¡${json.message || 'Cobro registrado!'} · ${json.data?.numero_comprobante || ''}`);
                 comprobanteId = json.data?.comprobante_id;
                 setTimeout(() => {
-                    if (comprobanteId) {
+                    if (json.data?.emision_id) {
+                        window.location.href = `${BASE_URL}/roles/atencion/emision_view.php?id=${Number(json.data.emision_id)}`;
+                    } else if (comprobanteId) {
                         window.location.href = `${BASE_URL}/roles/atencion/comprobante_view.php?id=${comprobanteId}`;
                     } else {
                         window.location.href = `${BASE_URL}/roles/atencion/dashboard.php`;
@@ -538,7 +556,8 @@ async function confirmarCobro() {
                     pagos, 
                     notas: document.getElementById('notas-cobro').value,
                     descuento,
-                    cargo_extra
+                    cargo_extra,
+                    csrf_token: CSRF_TOKEN
                 })
             });
             const json = await res.json();

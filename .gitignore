@@ -3,6 +3,10 @@ graphify-out/.graphify*
 
 # Secretos — NUNCA subir al repositorio
 .env
+*.p12
+*.pfx
+*.key
 
 # Assets generados / cache
 assets/logos/
+tmp/sunat_sessions/

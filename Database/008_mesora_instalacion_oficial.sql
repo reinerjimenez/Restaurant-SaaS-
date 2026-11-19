@@ -1,7 +1,7 @@
 -- MESORA: instalador oficial completo para una base nueva y vacia.
--- Esquema base 002 con cambios finales de 004 y 006 integrados.
+-- Esquema base 002 con cambios finales de 004, 006 y 011 integrados.
 -- MariaDB 10.4 / InnoDB. Importar una sola vez en phpMyAdmin.
--- No aplicar despues 001-007. No contiene DROP ni datos demo.
+-- No aplicar despues 001-007 ni 011. No contiene DROP ni datos demo.
 -- No sirve para actualizar una base existente ni reparar XAMPP.
 -- MariaDB confirma DDL por sentencia: ante fallo, usar otra base vacia.
 
@@ -415,13 +415,66 @@ ALTER TABLE `reversos_pago`
 ALTER TABLE `envios_comanda`
   ADD CONSTRAINT `fk_envios_restaurante` FOREIGN KEY (`restaurante_id`) REFERENCES `restaurantes` (`id`);
 
+-- Emision electronica: modo desactivado por defecto para cada restaurante.
+-- En bases ya instaladas con una version anterior de 008, aplicar solo 011.
+CREATE TABLE `emision_config` (
+  `restaurante_id` int(11) NOT NULL,
+  `modo` enum('desactivado','pruebas','produccion') NOT NULL DEFAULT 'desactivado',
+  `ruc` varchar(11) NOT NULL DEFAULT '',
+  `razon_social` varchar(200) NOT NULL DEFAULT '',
+  `direccion` varchar(300) NOT NULL DEFAULT '',
+  `ubigeo` varchar(6) NOT NULL DEFAULT '',
+  `regimen` enum('RER','RMT','GENERAL') NOT NULL DEFAULT 'RER',
+  `tasa_igv` decimal(5,2) NOT NULL DEFAULT 18.00,
+  `serie_boleta` varchar(4) NOT NULL DEFAULT 'B001',
+  `serie_factura` varchar(4) NOT NULL DEFAULT 'F001',
+  `correlativo_boleta` int unsigned NOT NULL DEFAULT 0,
+  `correlativo_factura` int unsigned NOT NULL DEFAULT 0,
+  `correlativo_boleta_pruebas` int unsigned NOT NULL DEFAULT 0,
+  `correlativo_factura_pruebas` int unsigned NOT NULL DEFAULT 0,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`restaurante_id`),
+  CONSTRAINT `fk_emision_config_restaurante` FOREIGN KEY (`restaurante_id`) REFERENCES `restaurantes` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `emision_documentos` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `restaurante_id` int(11) NOT NULL,
+  `pedido_id` int(11) NOT NULL,
+  `usuario_id` int(11) NOT NULL,
+  `ambiente` enum('pruebas','produccion') NOT NULL DEFAULT 'pruebas',
+  `tipo` enum('boleta','factura') NOT NULL,
+  `serie` varchar(4) NOT NULL,
+  `correlativo` int unsigned NOT NULL,
+  `estado` enum('pendiente','procesando','pendiente_ticket','incierto','aceptado','aceptado_observado','rechazado','prueba_aceptada','error') NOT NULL DEFAULT 'pendiente',
+  `snapshot_json` longtext NOT NULL CHECK (json_valid(`snapshot_json`)),
+  `xml_firmado` longtext DEFAULT NULL,
+  `resumen_xml_firmado` longtext DEFAULT NULL,
+  `cdr_xml` longtext DEFAULT NULL,
+  `ticket` varchar(100) DEFAULT NULL,
+  `resumen_identidad` varchar(64) DEFAULT NULL,
+  `respuesta_codigo` varchar(20) DEFAULT NULL,
+  `respuesta_mensaje` varchar(500) DEFAULT NULL,
+  `intentos` int unsigned NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_emision_pedido` (`restaurante_id`,`pedido_id`,`ambiente`),
+  UNIQUE KEY `uk_emision_numero` (`restaurante_id`,`ambiente`,`serie`,`correlativo`),
+  UNIQUE KEY `uk_emision_resumen` (`restaurante_id`,`ambiente`,`resumen_identidad`),
+  KEY `idx_emision_pendiente` (`restaurante_id`,`estado`,`id`),
+  CONSTRAINT `fk_emision_documentos_restaurante` FOREIGN KEY (`restaurante_id`) REFERENCES `restaurantes` (`id`),
+  CONSTRAINT `fk_emision_documentos_pedido` FOREIGN KEY (`pedido_id`) REFERENCES `pedidos` (`id`),
+  CONSTRAINT `fk_emision_documentos_usuario` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 
 -- Unico dato inicial: superadmin sin restaurante asignado.
 INSERT INTO `usuarios` (`restaurante_id`, `nombre`, `email`, `password`, `rol`, `activo`, `session_version`)
 VALUES (NULL, 'Super Admin', 'admin@mesora.local',
   '$2y$10$603N.8bo09r20VUwDGo/VOoJq8G62j1SOYwlfhHGHNSTS0sM5QdCq', 'superadmin', 1, 1);
 
--- Comprobaciones manuales: 1 superadmin, 1 usuario, 0 restaurantes, 21 tablas.
+-- Comprobaciones manuales: 1 superadmin, 1 usuario, 0 restaurantes, 23 tablas.
 SELECT COUNT(*) AS superadmins FROM `usuarios` WHERE `rol` = 'superadmin';
 SELECT COUNT(*) AS usuarios_total FROM `usuarios`;
 SELECT COUNT(*) AS restaurantes_total FROM `restaurantes`;

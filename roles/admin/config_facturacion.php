@@ -219,8 +219,9 @@ require_once '../../includes/header.php';
                 <div class="card mb-20">
                     <div class="card-title"><i class="fa-solid fa-building-columns"></i> Datos Legales — SUNAT</div>
                     <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:16px;">
-                        Requeridos para que las boletas y facturas sean válidas según la normativa de SUNAT Perú.
+                        Datos de identificación que aparecen en los documentos internos. Guardarlos no habilita la emisión electrónica ni acredita aceptación de SUNAT.
                     </p>
+                    <a href="emision_electronica.php" class="btn btn-ghost" style="min-height:44px;margin-bottom:16px;">Configurar emisión electrónica</a>
 
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" class="mb-16">
                         <div>
