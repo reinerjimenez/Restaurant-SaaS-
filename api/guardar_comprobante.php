@@ -24,7 +24,7 @@ $series = [
 if (!$pedido_id || !is_string($tipo) || (!isset($series[$tipo]) && !$es_fiscal_pruebas)) {
     jsonResponse(false, null, 'Pedido o tipo de comprobante inválido.');
 }
-$campos = ['tipo_documento' => 3, 'numero_documento' => 11, 'nombre_cliente' => 200,
+$campos = ['tipo_documento' => 13, 'numero_documento' => 11, 'nombre_cliente' => 200,
     'direccion' => 300, 'distrito' => 100, 'provincia' => 100, 'departamento' => 100, 'notas' => 65535];
 $datos = [];
 foreach ($campos as $campo => $maximo) {
@@ -36,8 +36,10 @@ foreach ($campos as $campo => $maximo) {
 }
 $tipo_documento = strtolower($datos['tipo_documento']);
 $numero_documento = $datos['numero_documento'];
-if ($tipo !== 'simple' && (!in_array($tipo_documento, ['dni', 'ruc'], true)
-    || !ctype_digit($numero_documento) || strlen($numero_documento) !== ($tipo_documento === 'dni' ? 8 : 11)
+$sin_documento = $tipo === 'boleta' && $tipo_documento === 'sin_documento';
+if ($tipo !== 'simple' && (!in_array($tipo_documento, ['dni', 'ruc', 'sin_documento'], true)
+    || (!$sin_documento && (!ctype_digit($numero_documento) || strlen($numero_documento) !== ($tipo_documento === 'dni' ? 8 : 11)))
+    || ($sin_documento && $numero_documento !== '')
     || $datos['nombre_cliente'] === '')) {
     jsonResponse(false, null, 'Indica un DNI o RUC válido y el nombre del cliente.');
 }
@@ -53,6 +55,7 @@ try {
     $turno = exigir_turno_abierto($db, $restaurante_id);
     $pedido = bloquear_pedido($db, $restaurante_id, $pedido_id, 'activo');
     [$total, $descuento, $cargo_extra] = calcular_cobro($db, $pedido, $input, $pagos);
+    if ($sin_documento && $total > 70000) throw new DomainException('Las boletas mayores a S/ 700.00 requieren identificación del cliente.');
 
     if ($es_fiscal_pruebas) {
         if (!emision_esquema_disponible($db)) throw new DomainException('Emisión de ensayo no instalada. El cobro no se realizó.');

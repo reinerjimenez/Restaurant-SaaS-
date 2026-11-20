@@ -39,10 +39,10 @@ try {
     }
 
     bloquear_pedido($db, $restaurante_id, $pedido_id, 'activo');
-    $producto = $db->prepare('SELECT precio, nombre FROM productos WHERE id = ? AND restaurante_id = ? AND activo = 1 AND sin_stock = 0');
+    $producto = $db->prepare('SELECT precio, nombre, afectacion_igv FROM productos WHERE id = ? AND restaurante_id = ? AND activo = 1 AND sin_stock = 0');
     $insertar = $db->prepare("INSERT INTO pedido_items
-        (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, subtotal, notas, estado)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pendiente')");
+        (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, subtotal, notas, afectacion_igv, estado)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendiente')");
     $opcion = $db->prepare('SELECT ov.id FROM opciones_valor ov JOIN opciones_grupo og ON og.id = ov.grupo_id
         WHERE ov.id = ? AND ov.grupo_id = ? AND og.producto_id = ?');
     $insertar_opcion = $db->prepare('INSERT INTO pedido_item_opciones (item_id, grupo_id, valor_id) VALUES (?, ?, ?)');
@@ -69,7 +69,7 @@ try {
             throw new DomainException('El subtotal de un producto supera el importe permitido.');
         }
         $insertar->execute([$pedido_id, $producto_id, $fila['nombre'], $cantidad, decimal_centimos($precio),
-            decimal_centimos($subtotal), trim($notas) ?: null]);
+            decimal_centimos($subtotal), trim($notas) ?: null, $fila['afectacion_igv']]);
         $item_id = $db->lastInsertId();
 
         foreach ($selecciones as $seleccion) {

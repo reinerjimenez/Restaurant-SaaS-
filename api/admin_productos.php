@@ -25,6 +25,10 @@ switch ($accion) {
         $activo       = !empty($input['activo']) ? 1 : 0;
         $tieneOpc     = !empty($input['tiene_opciones']) ? 1 : 0;
         $grupos       = $input['grupos']              ?? [];
+        $afectacion   = $input['afectacion_igv'] ?? 'gravada';
+        if (!in_array($afectacion, ['gravada', 'exonerada', 'inafecta'], true)) {
+            jsonResponse(false, null, 'Afectación IGV inválida.');
+        }
 
         // La API crea grupos nuevos para este producto; no acepta IDs de grupos existentes.
         if (!is_array($grupos) || array_filter($grupos, static fn($grupo): bool => !is_array($grupo) || array_key_exists('id', $grupo))) {
@@ -46,10 +50,10 @@ switch ($accion) {
 
             if ($accion === 'crear') {
                 $st = $db->prepare("
-                    INSERT INTO productos (restaurante_id, categoria_id, nombre, descripcion, precio, tiene_opciones, activo)
-                    VALUES (?,?,?,?,?,?,?)
+                    INSERT INTO productos (restaurante_id, categoria_id, nombre, descripcion, precio, tiene_opciones, activo, afectacion_igv)
+                    VALUES (?,?,?,?,?,?,?,?)
                 ");
-                $st->execute([$restauranteId, $categoriaId, $nombre, $descripcion ?: null, $precio, $tieneOpc, $activo]);
+                $st->execute([$restauranteId, $categoriaId, $nombre, $descripcion ?: null, $precio, $tieneOpc, $activo, $afectacion]);
                 $productoId = $db->lastInsertId();
                 $msg = "Producto \"$nombre\" creado correctamente";
             } else {
@@ -61,10 +65,10 @@ switch ($accion) {
 
                 $st = $db->prepare("
                     UPDATE productos
-                    SET categoria_id=?, nombre=?, descripcion=?, precio=?, tiene_opciones=?, activo=?
+                    SET categoria_id=?, nombre=?, descripcion=?, precio=?, tiene_opciones=?, activo=?, afectacion_igv=?
                     WHERE id=? AND restaurante_id=?
                 ");
-                $st->execute([$categoriaId, $nombre, $descripcion ?: null, $precio, $tieneOpc, $activo, $id, $restauranteId]);
+                $st->execute([$categoriaId, $nombre, $descripcion ?: null, $precio, $tieneOpc, $activo, $afectacion, $id, $restauranteId]);
                 $productoId = $id;
                 // Borrar grupos/valores anteriores para reescribirlos (el producto_id ya fue validado arriba)
                 $stDelVal = $db->prepare("DELETE ov FROM opciones_valor ov JOIN opciones_grupo og ON og.id = ov.grupo_id WHERE og.producto_id = ?");

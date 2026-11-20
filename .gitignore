@@ -9,4 +9,6 @@ graphify-out/.graphify*
 
 # Assets generados / cache
 assets/logos/
+docs.zip
 tmp/sunat_sessions/
+tmp/pdfs/

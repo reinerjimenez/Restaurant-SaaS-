@@ -271,7 +271,7 @@ require_once '../../includes/header.php';
 <div class="modal-overlay" id="modal-anular">
     <div class="modal" style="max-width:420px;">
         <div class="modal-header">
-            <div class="modal-title"><i class="fa-solid fa-ban" style="color:var(--danger);"></i> Anular comprobante</div>
+            <div class="modal-title"><i class="fa-solid fa-ban" style="color:var(--danger);"></i> Anular documento interno</div>
         </div>
         <div class="modal-body">
             <p id="anular-msg" style="color:var(--text-primary);margin-bottom:12px;"></p>
@@ -294,7 +294,7 @@ let anularId = null;
 
 function anularComprobante(id, numero) {
     anularId = id;
-    document.getElementById('anular-msg').textContent = `¿Anular el comprobante ${numero}? Esta acción no puede deshacerse. El registro quedará marcado como ANULADO.`;
+    document.getElementById('anular-msg').textContent = `¿Anular el documento interno ${numero}? No anula documentos SUNAT. Si la venta tiene emisión fiscal, usa su nota de crédito o baja y espera la CDR.`;
     document.getElementById('anular-motivo').value = '';
     Modal.abrir('modal-anular');
 }

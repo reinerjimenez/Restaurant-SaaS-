@@ -110,7 +110,7 @@ function calcular_cobro(PDO $db, array $pedido, array $input, array $pagos): arr
 
 function items_comprobante(PDO $db, int $pedido_id): array {
     $stmt = $db->prepare("
-        SELECT pi.cantidad, pi.precio_unitario, pi.subtotal,
+        SELECT pi.cantidad, pi.precio_unitario, pi.subtotal, pi.afectacion_igv,
                COALESCE(pi.nombre_producto, pr.nombre, 'Producto no disponible') AS producto_nombre,
                GROUP_CONCAT(ov.valor ORDER BY ov.id SEPARATOR ' · ') AS opciones_texto
         FROM pedido_items pi JOIN pedidos pe ON pe.id = pi.pedido_id
@@ -118,7 +118,7 @@ function items_comprobante(PDO $db, int $pedido_id): array {
         LEFT JOIN pedido_item_opciones pio ON pio.item_id = pi.id
         LEFT JOIN opciones_valor ov ON ov.id = pio.valor_id
         WHERE pi.pedido_id = ?
-        GROUP BY pi.id, pi.cantidad, pi.precio_unitario, pi.subtotal, pi.nombre_producto, pr.nombre
+        GROUP BY pi.id, pi.cantidad, pi.precio_unitario, pi.subtotal, pi.afectacion_igv, pi.nombre_producto, pr.nombre
         ORDER BY pi.id
     ");
     $stmt->execute([$pedido_id]);

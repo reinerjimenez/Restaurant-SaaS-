@@ -76,7 +76,7 @@ require_once '../../includes/header.php';
     </form>
     <form method="post" class="card mb-20">
         <h2>Preparar boleta o factura</h2>
-        <p>Indica el ID de un pedido ya cobrado de este restaurante. No genera un segundo cobro. Se conserva un solo documento de ensayo por pedido.</p>
+        <p>Indica el ID de un pedido ya cobrado de este restaurante. No genera un segundo cobro. Una reemisión solo procede tras un rechazo conciliado y conserva el documento anterior.</p>
         <input type="hidden" name="csrf_token" value="<?= fiscal_html(getCsrfToken()) ?>">
         <?= campos_contexto_restaurante() ?>
         <input type="hidden" name="accion" value="solicitar">
@@ -86,6 +86,7 @@ require_once '../../includes/header.php';
         <?php foreach (['numero_documento'=>['Número de documento',11], 'nombre'=>['Nombre o razón social del cliente',200], 'direccion'=>['Dirección del cliente (obligatoria para factura)',300]] as $campo=>[$etiqueta,$largo]): ?>
         <label class="form-label" for="<?= $campo ?>"><?= $etiqueta ?></label><input class="form-control" id="<?= $campo ?>" name="<?= $campo ?>" maxlength="<?= $largo ?>" <?= $campo !== 'direccion' ? 'required' : '' ?>>
         <?php endforeach; ?>
+        <label class="form-label"><input type="checkbox" name="reemision" value="1"> Reemitir tras rechazo confirmado (nuevo número fiscal)</label>
         <button type="submit" class="btn btn-primary" style="min-height:44px">Preparar documento de ensayo</button>
     </form>
     <div class="card"><h2>Últimos 50 documentos</h2><div style="overflow-x:auto"><table class="table"><thead><tr><th>ID</th><th>Pedido</th><th>Ambiente</th><th>Número</th><th>Estado</th><th>Resultado</th><th>Archivos</th></tr></thead><tbody>

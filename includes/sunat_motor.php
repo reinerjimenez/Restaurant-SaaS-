@@ -2,7 +2,7 @@
 /**
  * Motor sin BD para preparación SEE del contribuyente (UBL 2.1).
  * Referencias: https://cpe.sunat.gob.pe/guias-y-manuales y manual del programador.
- * Alcance: operaciones gravadas, contado, PEN, cantidades enteras, sin ajustes globales.
+ * Alcance: operaciones gravadas, contado, PEN y cantidades enteras.
  * Requiere homologación SUNAT antes de habilitar emisión real.
  */
 function sunat_centimos(string $monto): int {
@@ -70,9 +70,10 @@ function sunat_generar_invoice(array $datos): string {
         throw new DomainException('RUC o ubigeo del emisor inválido.');
     }
     $identificacion = $cliente['numero_documento'] ?? '';
-    $tipo_cliente = ['dni' => '1', 'ruc' => '6'][$cliente['tipo_documento'] ?? ''] ?? null;
-    if (!$tipo_cliente || !is_string($identificacion)
-        || !preg_match($tipo_cliente === '1' ? '/\A[0-9]{8}\z/D' : '/\A[0-9]{11}\z/D', $identificacion)
+    $tipo_cliente = ['dni' => '1', 'ruc' => '6', 'sin_documento' => '0'][$cliente['tipo_documento'] ?? ''] ?? null;
+    if ($tipo_cliente === null || !is_string($identificacion)
+        || ($tipo_cliente !== '0' && !preg_match($tipo_cliente === '1' ? '/\A[0-9]{8}\z/D' : '/\A[0-9]{11}\z/D', $identificacion))
+        || ($tipo_cliente === '0' && ($tipo !== '03' || $identificacion !== '' || sunat_centimos((string)($datos['total'] ?? '')) > 70000))
         || ($tipo_cliente === '6' && !sunat_ruc_valido($identificacion)) || ($tipo === '01' && $tipo_cliente !== '6')) {
         throw new DomainException('Documento del cliente inválido para el tipo fiscal.');
     }
@@ -81,17 +82,35 @@ function sunat_generar_invoice(array $datos): string {
     $items = $datos['items'] ?? null;
     if (!is_array($items) || !array_is_list($items) || !$items || count($items) > 500) throw new DomainException('Detalle fiscal inválido.');
     $lineas = []; $base = 0; $igv = 0; $total = 0;
+    $totales_afectacion = ['gravada'=>['base'=>0,'igv'=>0], 'exonerada'=>['base'=>0,'igv'=>0], 'inafecta'=>['base'=>0,'igv'=>0]];
     foreach ($items as $item) {
         $cantidad = filter_var($item['cantidad'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 1000000]]);
         $precio = sunat_centimos((string)($item['precio_unitario'] ?? ''));
         $importe = sunat_centimos((string)($item['subtotal'] ?? ''));
         if (!$cantidad || !$precio || $precio * $cantidad !== $importe) throw new DomainException('El detalle fiscal no concilia: verifica cantidades y ajustes.');
-        $neto = intdiv($importe * 10000 + intdiv(10000 + $tasa, 2), 10000 + $tasa);
+        $afectacion = $item['afectacion_igv'] ?? 'gravada';
+        if (!isset($totales_afectacion[$afectacion])) throw new DomainException('Afectación IGV inválida.');
+        $neto = $afectacion === 'gravada'
+            ? intdiv($importe * 10000 + intdiv(10000 + $tasa, 2), 10000 + $tasa) : $importe;
         $lineas[] = ['descripcion' => sunat_texto($item['descripcion'] ?? null, 500), 'cantidad' => $cantidad,
-            'precio' => $precio, 'base' => $neto, 'igv' => $importe - $neto];
+            'precio' => $precio, 'base' => $neto, 'igv' => $importe - $neto, 'afectacion'=>$afectacion];
+        $totales_afectacion[$afectacion]['base'] += $neto;
+        $totales_afectacion[$afectacion]['igv'] += $importe - $neto;
         $base += $neto; $igv += $importe - $neto; $total += $importe;
     }
-    if ($total !== sunat_centimos((string)($datos['total'] ?? ''))) throw new DomainException('El total fiscal no concilia con las líneas.');
+    $descuento = sunat_centimos((string)($datos['descuento'] ?? '0.00'));
+    $cargo = sunat_centimos((string)($datos['cargo_extra'] ?? '0.00'));
+    if (($descuento || $cargo) && ($totales_afectacion['exonerada']['base'] || $totales_afectacion['inafecta']['base'])) {
+        throw new DomainException('No se admiten ajustes globales con afectaciones IGV mixtas.');
+    }
+    if ($descuento >= $total || $total + $cargo - $descuento !== sunat_centimos((string)($datos['total'] ?? ''))) {
+        throw new DomainException('El total fiscal no concilia con las líneas y ajustes.');
+    }
+    $descuento_base = intdiv($descuento * 10000 + intdiv(10000 + $tasa, 2), 10000 + $tasa);
+    $cargo_base = intdiv($cargo * 10000 + intdiv(10000 + $tasa, 2), 10000 + $tasa);
+    $base_ajustada = $base - $descuento_base + $cargo_base;
+    $total_ajustado = $total - $descuento + $cargo;
+    $igv_ajustado = $total_ajustado - $base_ajustada;
     $ns = ['cbc' => 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2',
         'cac' => 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2',
         'ext' => 'urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2'];
@@ -120,7 +139,7 @@ function sunat_generar_invoice(array $datos): string {
     foreach ([['cac:AccountingSupplierParty', $ruc, '6', $emisor['razon_social'] ?? '', true],
         ['cac:AccountingCustomerParty', $identificacion, $tipo_cliente, $cliente['nombre'] ?? '', false]] as [$n, $id, $tipodoc, $nombre, $es_emisor]) {
         $party = $a($a($raiz, $n), 'cac:Party');
-        $a($a($party, 'cac:PartyIdentification'), 'cbc:ID', $id, ['schemeID' => $tipodoc,
+        if ($tipodoc !== '0') $a($a($party, 'cac:PartyIdentification'), 'cbc:ID', $id, ['schemeID' => $tipodoc,
             'schemeName' => 'Documento de Identidad', 'schemeAgencyName' => 'PE:SUNAT',
             'schemeURI' => 'urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06']);
         $legal = $a($party, 'cac:PartyLegalEntity'); $a($legal, 'cbc:RegistrationName', sunat_texto($nombre, 200));
@@ -133,26 +152,42 @@ function sunat_generar_invoice(array $datos): string {
     }
     $forma = $a($raiz, 'cac:PaymentTerms'); $a($forma, 'cbc:ID', 'FormaPago'); $a($forma, 'cbc:PaymentMeansID', 'Contado');
     $dinero = static fn(DOMNode $p, string $n, int $v) => $a($p, $n, sunat_decimal($v), ['currencyID' => 'PEN']);
-    $impuesto = static function (DOMNode $padre, int $neto, int $tributo, bool $linea) use ($a, $dinero, $tasa): void {
+    $impuesto = static function (DOMNode $padre, int $neto, int $tributo, bool $linea, string $afectacion = 'gravada') use ($a, $dinero, $tasa): void {
         $tax = $a($padre, 'cac:TaxTotal'); $dinero($tax, 'cbc:TaxAmount', $tributo);
         $sub = $a($tax, 'cac:TaxSubtotal'); $dinero($sub, 'cbc:TaxableAmount', $neto); $dinero($sub, 'cbc:TaxAmount', $tributo);
         $cat = $a($sub, 'cac:TaxCategory');
-        $a($cat, 'cbc:ID', 'S', ['schemeID' => 'UN/ECE 5305', 'schemeName' => 'Tax Category Identifier', 'schemeAgencyName' => 'United Nations Economic Commission for Europe']);
-        if ($linea) { $a($cat, 'cbc:Percent', sunat_decimal($tasa)); $a($cat, 'cbc:TaxExemptionReasonCode', '10'); }
-        $esquema = $a($cat, 'cac:TaxScheme'); $a($esquema, 'cbc:ID', '1000', ['schemeID' => 'UN/ECE 5153', 'schemeAgencyID' => '6']); $a($esquema, 'cbc:Name', 'IGV'); $a($esquema, 'cbc:TaxTypeCode', 'VAT');
+        $categoria = ['gravada'=>['S','10','1000','IGV','VAT'], 'exonerada'=>['E','20','9997','EXO','VAT'], 'inafecta'=>['O','30','9998','INA','FRE']][$afectacion];
+        $a($cat, 'cbc:ID', $categoria[0], ['schemeID' => 'UN/ECE 5305', 'schemeName' => 'Tax Category Identifier', 'schemeAgencyName' => 'United Nations Economic Commission for Europe']);
+        if ($linea) { if ($afectacion === 'gravada') $a($cat, 'cbc:Percent', sunat_decimal($tasa)); $a($cat, 'cbc:TaxExemptionReasonCode', $categoria[1]); }
+        $esquema = $a($cat, 'cac:TaxScheme'); $a($esquema, 'cbc:ID', $categoria[2], ['schemeID' => 'UN/ECE 5153', 'schemeAgencyID' => '6']); $a($esquema, 'cbc:Name', $categoria[3]); $a($esquema, 'cbc:TaxTypeCode', $categoria[4]);
     };
-    $impuesto($raiz, $base, $igv, false);
+    foreach ([[$descuento_base, false, '02'], [$cargo_base, true, '50']] as [$importe_ajuste, $es_cargo, $codigo]) {
+        if ($importe_ajuste <= 0) continue;
+        $ajuste = $a($raiz, 'cac:AllowanceCharge');
+        $a($ajuste, 'cbc:ChargeIndicator', $es_cargo ? 'true' : 'false');
+        $a($ajuste, 'cbc:AllowanceChargeReasonCode', $codigo);
+        $dinero($ajuste, 'cbc:Amount', $importe_ajuste);
+        $dinero($ajuste, 'cbc:BaseAmount', $base);
+    }
+    foreach ($totales_afectacion as $afectacion => $montos) {
+        if ($montos['base'] > 0) $impuesto($raiz,
+            $afectacion === 'gravada' ? $montos['base'] - $descuento_base + $cargo_base : $montos['base'],
+            $afectacion === 'gravada' ? $montos['igv'] - ($descuento - $descuento_base) + ($cargo - $cargo_base) : 0,
+            false, $afectacion);
+    }
     $monetario = $a($raiz, 'cac:LegalMonetaryTotal'); $dinero($monetario, 'cbc:LineExtensionAmount', $base);
-    $dinero($monetario, 'cbc:TaxInclusiveAmount', $total); $dinero($monetario, 'cbc:PayableAmount', $total);
+    if ($descuento_base) $dinero($monetario, 'cbc:AllowanceTotalAmount', $descuento_base);
+    if ($cargo_base) $dinero($monetario, 'cbc:ChargeTotalAmount', $cargo_base);
+    $dinero($monetario, 'cbc:TaxInclusiveAmount', $total_ajustado); $dinero($monetario, 'cbc:PayableAmount', $total_ajustado);
     foreach ($lineas as $i => $linea) {
         $n = $a($raiz, 'cac:InvoiceLine'); $a($n, 'cbc:ID', (string)($i + 1));
         $a($n, 'cbc:InvoicedQuantity', (string)$linea['cantidad'], ['unitCode' => 'NIU']);
         $dinero($n, 'cbc:LineExtensionAmount', $linea['base']);
         $alterno = $a($a($n, 'cac:PricingReference'), 'cac:AlternativeConditionPrice');
         $dinero($alterno, 'cbc:PriceAmount', $linea['precio']); $a($alterno, 'cbc:PriceTypeCode', '01');
-        $impuesto($n, $linea['base'], $linea['igv'], true);
+        $impuesto($n, $linea['base'], $linea['igv'], true, $linea['afectacion']);
         $a($a($n, 'cac:Item'), 'cbc:Description', $linea['descripcion']);
-        $a($a($n, 'cac:Price'), 'cbc:PriceAmount', number_format($linea['precio'] * 100 / (10000 + $tasa), 6, '.', ''), ['currencyID' => 'PEN']);
+        $a($a($n, 'cac:Price'), 'cbc:PriceAmount', number_format($linea['precio'] * 100 / ($linea['afectacion'] === 'gravada' ? 10000 + $tasa : 10000), 6, '.', ''), ['currencyID' => 'PEN']);
     }
     return $doc->saveXML();
 }
@@ -205,14 +240,15 @@ function sunat_firmar_xml(string $xml, string $pkcs12, string $clave): string {
 /** ZIP mediante PharData nativo; no requiere habilitar la extensión ZIP. */
 function sunat_crear_zip(string $nombre_xml, string $xml): string {
     if (!class_exists('PharData')) throw new RuntimeException('Falta PharData para el envío SUNAT.');
-    if (!preg_match('/\A[0-9]{11}-(?:(?:01|03)-[BF][A-Z0-9]{3}-[1-9][0-9]{0,7}|RC-[0-9]{8}-[1-9][0-9]{0,4})\.xml\z/D', $nombre_xml)) throw new DomainException('Nombre fiscal inválido.');
+    if (!preg_match('/\A[0-9]{11}-(?:(?:01|03|07)-[BF][A-Z0-9]{3}-[1-9][0-9]{0,7}|RC-[0-9]{8}-[1-9][0-9]{0,4})\.xml\z/D', $nombre_xml)) throw new DomainException('Nombre fiscal inválido.');
     $doc = sunat_cargar_xml($xml); $xp = new DOMXPath($doc);
     $xp->registerNamespace('cbc', 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2');
     $xp->registerNamespace('cac', 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2');
     $ruc = $xp->evaluate('string(/*/cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID)');
     if ($ruc === '') $ruc = $xp->evaluate('string(/*/cac:AccountingSupplierParty/cbc:CustomerAssignedAccountID)');
     $id = $xp->evaluate('string(/*/cbc:ID)');
-    $tipo = $xp->evaluate('string(/*/cbc:InvoiceTypeCode)');
+    $tipo = $doc->documentElement->localName === 'CreditNote' ? '07'
+        : $xp->evaluate('string(/*/cbc:InvoiceTypeCode)');
     $esperado = $doc->documentElement->localName === 'SummaryDocuments' ? "$ruc-$id.xml" : "$ruc-$tipo-$id.xml";
     if ($nombre_xml !== $esperado) throw new DomainException('El XML no corresponde a la identidad del archivo fiscal.');
     $temporal = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'mesora_' . bin2hex(random_bytes(16)) . '.zip';
@@ -226,7 +262,7 @@ function sunat_crear_zip(string $nombre_xml, string $xml): string {
 /** Extrae únicamente la CDR esperada; nunca extrae archivos del ZIP al directorio web. */
 function sunat_leer_cdr(string $bytes, string $identidad_esperada): array {
     if (!class_exists('PharData')) throw new RuntimeException('Falta PharData para leer la CDR.');
-    if (strlen($bytes) > 8 * 1024 * 1024 || !preg_match('/\A([0-9]{11})-((?:01|03)-[BF][A-Z0-9]{3}-[1-9][0-9]{0,7}|RC-[0-9]{8}-[1-9][0-9]{0,4})\z/D', $identidad_esperada, $identidad)) throw new DomainException('Identidad CDR inválida.');
+    if (strlen($bytes) > 8 * 1024 * 1024 || !preg_match('/\A([0-9]{11})-((?:01|03|07)-[BF][A-Z0-9]{3}-[1-9][0-9]{0,7}|RC-[0-9]{8}-[1-9][0-9]{0,4})\z/D', $identidad_esperada, $identidad)) throw new DomainException('Identidad CDR inválida.');
     $temporal = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'mesora_cdr_' . bin2hex(random_bytes(16)) . '.zip';
     try {
         if (file_put_contents($temporal, $bytes) === false) throw new RuntimeException('No se pudo abrir la CDR.');
@@ -292,20 +328,20 @@ function sunat_enviar_bill(string $zip, string $nombre_zip, string $usuario, str
 }
 
 /**
- * Recuperación de CDR de factura según manual SUNAT, secciones 2.7.1 y 2.8.
+ * Recuperación de CDR de factura o nota de crédito de factura según manual SUNAT, secciones 2.7.1 y 2.8.
  * No se inventa consulta para boleta: el manual documenta 01/07/08, serie F.
  * Retorna CDR solo cuando el servicio entrega contenido; no deduce aceptación
  * de un código de transporte ni reenvía documentos ante una respuesta vacía.
  */
 function sunat_consultar_cdr(string $identidad, string $usuario, string $clave, bool $produccion = true): array {
-    if (!preg_match('/\A([0-9]{11})-(01)-(F[A-Z0-9]{3})-([1-9][0-9]{0,7})\z/D', $identidad, $partes)
+    if (!preg_match('/\A([0-9]{11})-(01|07)-(F[A-Z0-9]{3})-([1-9][0-9]{0,7})\z/D', $identidad, $partes)
         || !sunat_ruc_valido($partes[1]) || $usuario === '' || $clave === '') {
-        throw new DomainException('La recuperación de CDR solo admite facturas con identidad completa.');
+        throw new DomainException('La recuperación de CDR solo admite facturas o notas de factura con identidad completa.');
     }
     if (!$produccion) throw new DomainException('SUNAT documenta esta consulta de CDR para producción.');
     if (!extension_loaded('curl')) throw new RuntimeException('Falta cURL para consultar la CDR.');
     $e = static fn(string $s): string => htmlspecialchars($s, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-    $cuerpo = '<ser:getStatusCdr><rucComprobante>' . $partes[1] . '</rucComprobante><tipoComprobante>01</tipoComprobante><serieComprobante>'
+    $cuerpo = '<ser:getStatusCdr><rucComprobante>' . $partes[1] . '</rucComprobante><tipoComprobante>' . $partes[2] . '</tipoComprobante><serieComprobante>'
         . $partes[3] . '</serieComprobante><numeroComprobante>' . $partes[4] . '</numeroComprobante></ser:getStatusCdr>';
     $sobre = '<?xml version="1.0" encoding="UTF-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://service.sunat.gob.pe" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"><soap:Header><wsse:Security><wsse:UsernameToken><wsse:Username>'
         . $e($usuario) . '</wsse:Username><wsse:Password>' . $e($clave) . '</wsse:Password></wsse:UsernameToken></wsse:Security></soap:Header><soap:Body>' . $cuerpo . '</soap:Body></soap:Envelope>';

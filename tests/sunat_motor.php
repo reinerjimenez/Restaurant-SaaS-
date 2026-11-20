@@ -21,8 +21,34 @@ $b = $datos; $b['fecha'] = '2026-02-30'; rechazar_motor(fn() => sunat_generar_in
 $b = $datos; $b['emisor']['ruc'] = '20100066604'; rechazar_motor(fn() => sunat_generar_invoice($b));
 $b = $datos; $b['tasa_igv'] = '10.50'; $b['total'] = $b['items'][0]['subtotal'] = '110.50'; $b['items'][0]['cantidad'] = 1; $b['items'][0]['precio_unitario'] = '110.50';
 comprobar_motor(str_contains(sunat_generar_invoice($b), '>100.00<'), 'tasa 10.50 configurable');
+$b = $datos; $b['descuento'] = '10.00'; $b['cargo_extra'] = '2.00'; $b['total'] = '110.00';
+$ajustado = sunat_generar_invoice($b);
+comprobar_motor(str_contains($ajustado, '<cbc:AllowanceTotalAmount currencyID="PEN">8.47</cbc:AllowanceTotalAmount>')
+    && str_contains($ajustado, '<cbc:ChargeTotalAmount currencyID="PEN">1.69</cbc:ChargeTotalAmount>')
+    && str_contains($ajustado, '<cbc:PayableAmount currencyID="PEN">110.00</cbc:PayableAmount>'), 'descuento y cargo global conciliados');
+$b['total'] = '109.99'; rechazar_motor(fn() => sunat_generar_invoice($b));
+$mixto = $datos;
+$mixto['items'] = [
+    ['descripcion'=>'Gravado','cantidad'=>1,'precio_unitario'=>'118.00','subtotal'=>'118.00','afectacion_igv'=>'gravada'],
+    ['descripcion'=>'Exonerado','cantidad'=>1,'precio_unitario'=>'20.00','subtotal'=>'20.00','afectacion_igv'=>'exonerada'],
+    ['descripcion'=>'Inafecto','cantidad'=>1,'precio_unitario'=>'10.00','subtotal'=>'10.00','afectacion_igv'=>'inafecta'],
+];
+$mixto['total'] = '148.00';
+$xml_mixto = sunat_generar_invoice($mixto);
+comprobar_motor(str_contains($xml_mixto, '>9997</cbc:ID>') && str_contains($xml_mixto, '>9998</cbc:ID>')
+    && str_contains($xml_mixto, '<cbc:PayableAmount currencyID="PEN">148.00</cbc:PayableAmount>'), 'afectaciones mixtas conciliadas');
+$mixto['descuento'] = '1.00'; $mixto['total'] = '147.00'; rechazar_motor(fn() => sunat_generar_invoice($mixto));
 $b = $datos; $b['tipo'] = 'boleta'; $b['serie'] = 'B001'; $b['cliente']['tipo_documento'] = 'dni'; $b['cliente']['numero_documento'] = '12345678';
 comprobar_motor(str_contains(sunat_generar_invoice($b), '>03<'), 'boleta UBL');
+$anonima = $b; $anonima['cliente'] = ['tipo_documento'=>'sin_documento', 'numero_documento'=>'', 'nombre'=>'Consumidor final'];
+comprobar_motor(!str_contains(sunat_generar_invoice($anonima), '<cac:AccountingCustomerParty><cac:Party><cac:PartyIdentification>'),
+    'boleta anónima omite identificación del cliente');
+$anonima['total'] = $anonima['items'][0]['subtotal'] = $anonima['items'][0]['precio_unitario'] = '700.00';
+$anonima['items'][0]['cantidad'] = 1;
+comprobar_motor(str_contains(sunat_generar_invoice($anonima), '<cbc:PayableAmount currencyID="PEN">700.00</cbc:PayableAmount>'),
+    'boleta de S/ 700.00 admite cliente sin documento');
+$anonima['total'] = $anonima['items'][0]['subtotal'] = $anonima['items'][0]['precio_unitario'] = '700.01';
+rechazar_motor(fn() => sunat_generar_invoice($anonima));
 rechazar_motor(fn() => sunat_cargar_xml('<!DOCTYPE a [<!ENTITY x SYSTEM "file:///etc/passwd">]><a>&x;</a>'));
 $config = getenv('OPENSSL_CONF') ?: (PHP_OS_FAMILY === 'Windows' ? 'C:/xampp/apache/conf/openssl.cnf' : '/etc/ssl/openssl.cnf');
 $opciones = ['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA, 'config' => $config];

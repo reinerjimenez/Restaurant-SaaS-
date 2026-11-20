@@ -132,6 +132,9 @@ require_once '../../includes/header.php';
     <!-- ══ PASO 2: Datos del cliente (DNI/RUC) ═══════════════════ -->
     <div class="card mb-16" id="card-datos-cliente" style="display:none;">
         <div class="card-title" id="titulo-datos-cliente"><i class="fa-solid fa-user"></i> Datos del cliente</div>
+        <label id="boleta-sin-documento-wrap" class="form-label" style="display:none;min-height:44px;align-items:center;gap:8px">
+            <input type="checkbox" id="boleta-sin-documento"> Boleta sin DNI (solo hasta S/ 700.00)
+        </label>
 
         <div style="display:flex;gap:8px;margin-bottom:12px;" id="buscador-doc-wrap">
             <div style="flex:1;">
@@ -281,6 +284,9 @@ function seleccionarTipoComp(tipo) {
     const camposFactura = document.getElementById('campos-factura-extra');
     const labelNroDoc  = document.getElementById('label-nro-doc');
     const inputDoc     = document.getElementById('input-nro-doc');
+    const sinDocWrap = document.getElementById('boleta-sin-documento-wrap');
+    document.getElementById('boleta-sin-documento').checked = false;
+    sinDocWrap.style.display = tipo === 'boleta' ? 'flex' : 'none';
 
     if (tipo === 'no' || tipo === 'simple') {
         cardCliente.style.display = 'none';
@@ -311,6 +317,12 @@ function seleccionarTipoComp(tipo) {
 
 // Init
 seleccionarTipoComp('no');
+document.getElementById('boleta-sin-documento').addEventListener('change', event => {
+    const anonima = event.target.checked;
+    document.getElementById('buscador-doc-wrap').style.display = anonima ? 'none' : 'flex';
+    document.getElementById('doc-status').style.display = anonima ? 'none' : '';
+    document.getElementById('campos-cliente').style.display = anonima ? 'none' : '';
+});
 
 // ── Autoconsulta de DNI/RUC ───────────────────────────────────
 let docTimer = null;
@@ -470,23 +482,24 @@ async function confirmarCobro() {
     let clienteData = null;
     if (tipoComp !== 'no') {
         if (tipoComp !== 'simple') {
+            const anonima = tipoComp === 'boleta' && document.getElementById('boleta-sin-documento').checked;
             const numDoc       = document.getElementById('input-nro-doc').value.trim().replace(/\D/g,'');
             const nombreCliente= document.getElementById('input-nombre-cliente')?.value.trim() || '';
             const tipoDoc      = tipoComp === 'boleta' ? 'dni' : 'ruc';
             const need         = tipoComp === 'boleta' ? 8 : 11;
 
-            if (numDoc.length !== need) {
+            if (!anonima && numDoc.length !== need) {
                 Toast.advertencia(`El ${tipoDoc.toUpperCase()} debe tener ${need} dígitos.`);
                 return;
             }
-            if (!nombreCliente) {
+            if (!anonima && !nombreCliente) {
                 Toast.advertencia('Ingresa el nombre del cliente.');
                 return;
             }
             clienteData = {
-                tipo_documento:  tipoDoc,
-                numero_documento: numDoc,
-                nombre_cliente:   nombreCliente,
+                tipo_documento:  anonima ? 'sin_documento' : tipoDoc,
+                numero_documento: anonima ? '' : numDoc,
+                nombre_cliente:   anonima ? 'Consumidor final' : nombreCliente,
                 direccion:        document.getElementById('input-direccion')?.value.trim()    || '',
                 distrito:         document.getElementById('input-distrito')?.value.trim()     || '',
                 provincia:        document.getElementById('input-provincia')?.value.trim()    || '',

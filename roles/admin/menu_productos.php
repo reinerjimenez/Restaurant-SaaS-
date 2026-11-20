@@ -153,6 +153,14 @@ require_once '../../includes/header.php';
                     </div>
                 </div>
                 <div class="form-group">
+                    <label class="form-label" for="prod-afectacion">Afectación IGV validada por el contador</label>
+                    <select id="prod-afectacion" class="form-control" required>
+                        <option value="gravada">Gravada</option>
+                        <option value="exonerada">Exonerada</option>
+                        <option value="inafecta">Inafecta</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
                         <input type="checkbox" id="prod-opciones" style="width:18px;height:18px;">
                         <span class="form-label" style="margin:0;">
@@ -214,6 +222,7 @@ function editarProducto(prod) {
     document.getElementById('prod-descripcion').value = prod.descripcion || '';
     document.getElementById('prod-precio').value      = prod.precio;
     document.getElementById('prod-activo').value      = prod.activo;
+    document.getElementById('prod-afectacion').value = prod.afectacion_igv || 'gravada';
     document.getElementById('prod-opciones').checked  = prod.tiene_opciones == 1;
     document.getElementById('seccion-opciones').style.display = prod.tiene_opciones == 1 ? 'block' : 'none';
     if (prod.tiene_opciones == 1) cargarGruposExistentes(prod.id);
@@ -318,6 +327,7 @@ async function guardarProducto() {
         descripcion:   document.getElementById('prod-descripcion').value,
         precio:        document.getElementById('prod-precio').value,
         activo:        document.getElementById('prod-activo').value,
+        afectacion_igv: document.getElementById('prod-afectacion').value,
         tiene_opciones: tieneOpciones ? 1 : 0,
         grupos: tieneOpciones ? opcGrupos.filter(g => g.nombre.trim()) : [],
     };

@@ -17,11 +17,11 @@ Sin el esquema nuevo, el flujo normal de cobro y comprobante simple sigue dispon
 1. Iniciar sesión como admin del restaurante o como superadmin con el restaurante seleccionado.
 2. Abrir **Emisión electrónica**, disponible en el menú y desde Mi Restaurante.
 3. Completar RUC, razón social, dirección, ubigeo, régimen individual, tasa IGV validada por contador y series de ensayo. Elegir **Pruebas sin envío SUNAT**. Se admite RER, RMT o General por restaurante; el régimen de un restaurante no habilita a otro.
-4. Usar datos de ensayo y un pedido de ensayo sin descuentos ni cargos. La factura exige RUC y dirección del cliente; la boleta del ensayo actual exige DNI o RUC. No cargar certificados ni Clave SOL en el formulario.
+4. Usar datos de ensayo. Se admiten descuentos y cargos desglosados, productos gravados, exonerados o inafectos, y boleta sin identificación del cliente hasta S/ 700; sobre ese monto se exige identificación. La factura exige RUC y dirección del cliente. No cargar certificados ni Clave SOL en el formulario.
 
 En **Cobrar pedido**, las opciones boleta/factura aparecen según configuración y autorización de ese restaurante. Registran el cobro y preparan el documento en la misma transacción: si falla la preparación, el cobro se revierte. El mensaje distingue ensayo de emisión pendiente de aceptación. El servidor obtiene el ambiente desde la configuración, nunca de una selección arbitraria del cliente. El endpoint histórico sin solicitud explícita de preparación fiscal rechaza boleta/factura antes de acceder a la base o cobrar. Después de preparar, se abre la vista de estado y descarga XML, CDR y una representación PDF con QR del restaurante. El PDF muestra de forma visible si es prueba, pendiente o aceptado; no convierte un documento pendiente en aceptado.
 
-También se puede preparar desde Emisión electrónica un documento para un pedido ya cobrado del mismo restaurante. Esta operación no vuelve a cobrar. Un pedido conserva un solo documento de ensayo por ambiente; no crear un segundo documento para corregir cliente o tipo sin revisar primero el existente.
+También se puede preparar desde Emisión electrónica un documento para un pedido ya cobrado del mismo restaurante. Esta operación no vuelve a cobrar. Si el documento anterior quedó rechazado de forma definitiva, el administrador puede solicitar una reemisión explícita; conserva el XML, CDR y correlativo del intento rechazado y crea un nuevo intento. No se reemite un documento pendiente, incierto ni aceptado.
 
 Las operaciones de reabrir o eliminar venta rechazan una venta que ya tenga evidencia en el módulo fiscal, para impedir un reverso local que deje inconsistencia con el documento. Los documentos se listan en la pantalla del restaurante, con límite de 50 filas.
 
@@ -57,6 +57,7 @@ Los RC usan secuencia diaria por restaurante bajo el bloqueo del restaurante, co
 - Sintaxis PHP revisada en guardar_comprobante, ambas vistas de impresión, configuración, sidebar, reabrir_venta y eliminar_venta; JavaScript extraído de cobrar.php compiló con Node.
 - `php tests/sunat_motor.php`, `php tests/emision_fiscal.php`, `php tests/comprobantes_frontera_fiscal.php` y `php tests/emision_pdf.php`: pasaron localmente. El PDF generado empezó con `%PDF-` y el QR produjo los datos fiscales esperados.
 - Ensayo HTTP/BD en `mesora_sunat_test`: se instalaron 008 y 011 y datos ficticios A/B. La boleta de A registró el cobro y la preparación; su PDF se descargó con HTTP 200. La vista y descarga de A para B respondieron 404; el CSRF inválido respondió 403. Una boleta sin preparación no cobró el pedido. Un descuento no soportado devolvió error y dejó pedido, pagos y documento sin cambios.
+- `php tests/emision_ajustes.php`: pasó para nota de crédito de factura tipo 07 y baja de boleta por RC condición 3, con CDR ficticias aceptada, observada y rechazada. `php tests/sunat_motor.php` pasó 45 comprobaciones, incluidos descuentos, cargos y afectaciones IGV.
 
 Estas pruebas no equivalen a homologación ni a aceptación de SUNAT. No se inspeccionó visualmente el PDF renderizado porque Poppler no está disponible en este entorno.
 
@@ -64,7 +65,7 @@ Estas pruebas no equivalen a homologación ni a aceptación de SUNAT. No se insp
 
 Existe código de envío y configuración de producción, pero habilitarlos no sustituye las verificaciones tributarias y técnicas siguientes.
 
-Faltan las pruebas con el RUC activo/habido y CDT real, homologación aplicable y aceptación externa; soporte fiscal de descuentos/cargos, afectaciones exoneradas/inafectas y boletas sin identificación cuando corresponda; notas de crédito/débito y baja fiscal; verificación visual y entrega del PDF, y cierre del NO-GO de aislamiento multitenant. Cada restaurante requiere su propia validación fiscal y técnica. El modelo conserva un documento por pedido/ambiente: un documento rechazado requiere revisión manual; no se puede reemitir para el mismo pedido desde esta interfaz sin desarrollar ese procedimiento.
+Faltan las pruebas con el RUC activo/habido y CDT real, homologación aplicable y aceptación externa; notas de débito, notas de crédito de boleta mediante resumen 07 y otros ajustes parciales; verificación visual del PDF, y cierre del NO-GO de aislamiento multitenant. Cada restaurante requiere su propia validación fiscal y técnica.
 
 Antes de activar, revisar el hosting para XML, firma OpenSSL, transporte SOAP mediante cURL, PharData para ZIP, tareas confiables y almacenamiento privado. El motor usa PharData y cURL nativos para funcionar sin extensiones SOAP ni ZIP; verificar su disponibilidad también en el hosting. No modificar el servidor ni instalar dependencias sin autorización.
 

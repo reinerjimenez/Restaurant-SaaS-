@@ -124,15 +124,19 @@ function emision_guardar_config(PDO $db, int $restaurante_id, array $input): voi
 function emision_solicitar(PDO $db, int $restaurante_id, int $usuario_id, array $input): int {
     $pedido_id = filter_var($input['pedido_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     $tipo = $input['tipo'] ?? '';
+    $reemision = ($input['reemision'] ?? false) === true || ($input['reemision'] ?? null) === '1';
     $cliente = [];
-    foreach (['numero_documento' => 11, 'nombre' => 200, 'direccion' => 300, 'tipo_documento' => 3] as $campo => $maximo) {
+    foreach (['numero_documento' => 11, 'nombre' => 200, 'direccion' => 300, 'tipo_documento' => 13] as $campo => $maximo) {
         $v = $input[$campo] ?? '';
         if (!is_string($v) || mb_strlen($v) > $maximo) throw new DomainException('Datos del cliente inválidos.');
         $cliente[$campo] = trim($v);
     }
+    $sin_documento = $tipo === 'boleta' && $cliente['tipo_documento'] === 'sin_documento';
+    if ($sin_documento && $cliente['nombre'] === '') $cliente['nombre'] = 'Consumidor final';
     if (!$pedido_id || !in_array($tipo, ['boleta', 'factura'], true) || $cliente['nombre'] === ''
-        || !in_array($cliente['tipo_documento'], ['dni', 'ruc'], true)
-        || !preg_match($cliente['tipo_documento'] === 'ruc' ? '/\A\d{11}\z/' : '/\A\d{8}\z/', $cliente['numero_documento'])
+        || !in_array($cliente['tipo_documento'], ['dni', 'ruc', 'sin_documento'], true)
+        || (!$sin_documento && !preg_match($cliente['tipo_documento'] === 'ruc' ? '/\A\d{11}\z/' : '/\A\d{8}\z/', $cliente['numero_documento']))
+        || ($sin_documento && $cliente['numero_documento'] !== '')
         || ($cliente['tipo_documento'] === 'ruc' && !sunat_ruc_valido($cliente['numero_documento']))
         || ($tipo === 'factura' && ($cliente['tipo_documento'] !== 'ruc' || $cliente['direccion'] === ''))) {
         throw new DomainException('Indica un pedido cobrado y datos válidos del cliente; la factura exige RUC y dirección.');
@@ -142,6 +146,9 @@ function emision_solicitar(PDO $db, int $restaurante_id, int $usuario_id, array 
     try {
         bloquear_restaurante($db, $restaurante_id);
         $pedido = bloquear_pedido($db, $restaurante_id, $pedido_id, 'cobrado');
+        if ($sin_documento && importe_centimos($pedido['total']) > 70000) {
+            throw new DomainException('Las boletas mayores a S/ 700.00 requieren identificación del cliente.');
+        }
         $st = $db->prepare('SELECT * FROM emision_config WHERE restaurante_id = ? FOR UPDATE');
         $st->execute([$restaurante_id]);
         $c = $st->fetch();
@@ -152,25 +159,57 @@ function emision_solicitar(PDO $db, int $restaurante_id, int $usuario_id, array 
             if (!emision_produccion_autorizada($restaurante_id)) throw new DomainException('Producción no autorizada para este restaurante.');
             emision_credenciales($restaurante_id);
         }
-        $st = $db->prepare('SELECT id, tipo, snapshot_json FROM emision_documentos WHERE restaurante_id = ? AND pedido_id = ? AND ambiente = ?');
+        $st = $db->prepare('SELECT id, tipo, snapshot_json, estado, intento FROM emision_documentos WHERE restaurante_id = ? AND pedido_id = ? AND ambiente = ? ORDER BY intento DESC LIMIT 1 FOR UPDATE');
         $st->execute([$restaurante_id, $pedido_id, $ambiente]);
+        $intento = 1;
         if ($existente = $st->fetch()) {
+            if ($reemision) {
+                if ($existente['estado'] !== 'rechazado') {
+                    throw new DomainException('Solo se puede reemitir un documento rechazado y conciliado.');
+                }
+                $intento = (int)($existente['intento'] ?? 1) + 1;
+                if ($intento > 100) throw new DomainException('El pedido alcanzó el límite de intentos de emisión.');
+            } else {
             $anterior = json_decode($existente['snapshot_json'], true, 512, JSON_THROW_ON_ERROR);
             if ($existente['tipo'] !== $tipo || $anterior['cliente'] !== $cliente) {
                 throw new DomainException('Ya existe un documento de ensayo para este pedido con otros datos. Revisa el historial.');
             }
             if ($propia) $db->commit();
             return (int)$existente['id'];
-        }
-        if (importe_centimos($pedido['descuento']) || importe_centimos($pedido['cargo_extra'])) {
-            throw new DomainException('Los pedidos con descuentos o cargos necesitan el desglose fiscal; este ensayo aún no los admite.');
+            }
+        } elseif ($reemision) {
+            throw new DomainException('No hay un documento rechazado para reemitir.');
         }
         $items = array_map(static fn(array $i): array => ['descripcion' => $i['producto_nombre']
             . ($i['opciones_texto'] ? ' · ' . $i['opciones_texto'] : ''), 'cantidad' => (int)$i['cantidad'],
-            'precio_unitario' => $i['precio_unitario'], 'subtotal' => $i['subtotal']], items_comprobante($db, $pedido_id));
-        if (!$items || subtotal_pedido($db, $pedido_id) !== importe_centimos($pedido['total'])) {
+            'precio_unitario' => $i['precio_unitario'], 'subtotal' => $i['subtotal'],
+            'afectacion_igv' => $i['afectacion_igv']], items_comprobante($db, $pedido_id));
+        if (!$items || subtotal_pedido($db, $pedido_id) + importe_centimos($pedido['cargo_extra'])
+            - importe_centimos($pedido['descuento']) !== importe_centimos($pedido['total'])) {
             throw new DomainException('El detalle del pedido no concilia con su total.');
         }
+        $resumen = ['base_gravada'=>0,'igv'=>0,'exonerada'=>0,'inafecta'=>0];
+        $tasa = importe_centimos($c['tasa_igv']);
+        foreach ($items as $item) {
+            $importe = importe_centimos($item['subtotal']);
+            $afectacion = $item['afectacion_igv'];
+            if ($afectacion === 'gravada') {
+                $base_item = intdiv($importe * 10000 + intdiv(10000 + $tasa, 2), 10000 + $tasa);
+                $resumen['base_gravada'] += $base_item;
+                $resumen['igv'] += $importe - $base_item;
+            } elseif (in_array($afectacion, ['exonerada','inafecta'], true)) $resumen[$afectacion] += $importe;
+            else throw new DomainException('Afectación IGV inválida en un ítem.');
+        }
+        $descuento = importe_centimos($pedido['descuento']);
+        $cargo = importe_centimos($pedido['cargo_extra']);
+        if (($descuento || $cargo) && ($resumen['exonerada'] || $resumen['inafecta'])) {
+            throw new DomainException('Los ajustes globales con productos exonerados o inafectos requieren desglose adicional.');
+        }
+        $descuento_base = intdiv($descuento * 10000 + intdiv(10000 + $tasa, 2), 10000 + $tasa);
+        $cargo_base = intdiv($cargo * 10000 + intdiv(10000 + $tasa, 2), 10000 + $tasa);
+        $resumen['base_gravada'] += $cargo_base - $descuento_base;
+        $resumen['igv'] += ($cargo - $cargo_base) - ($descuento - $descuento_base);
+        $resumen = array_map('decimal_centimos', $resumen);
         $columna = $tipo === 'factura' ? 'correlativo_factura' : 'correlativo_boleta';
         if ($ambiente === 'pruebas') $columna .= '_pruebas';
         $serie = $c[$tipo === 'factura' ? 'serie_factura' : 'serie_boleta'];
@@ -178,10 +217,12 @@ function emision_solicitar(PDO $db, int $restaurante_id, int $usuario_id, array 
         if ($numero > 99999999) throw new DomainException('La serie de ensayo agotó su correlativo.');
         $snapshot = ['emisor' => array_intersect_key($c, array_flip(['ruc', 'razon_social', 'direccion', 'ubigeo', 'regimen'])),
             'tipo' => $tipo, 'serie' => $serie, 'correlativo' => $numero, 'fecha' => date('Y-m-d'), 'moneda' => 'PEN',
-            'tasa_igv' => $c['tasa_igv'], 'cliente' => $cliente, 'items' => $items, 'total' => $pedido['total']];
+            'tasa_igv' => $c['tasa_igv'], 'cliente' => $cliente, 'items' => $items,
+            'descuento' => $pedido['descuento'], 'cargo_extra' => $pedido['cargo_extra'], 'total' => $pedido['total'],
+            'resumen_fiscal'=>$resumen];
         $db->prepare("UPDATE emision_config SET $columna = ? WHERE restaurante_id = ?")->execute([$numero, $restaurante_id]);
-        $db->prepare('INSERT INTO emision_documentos (restaurante_id,pedido_id,usuario_id,ambiente,tipo,serie,correlativo,snapshot_json)
-            VALUES (?,?,?,?,?,?,?,?)')->execute([$restaurante_id, $pedido_id, $usuario_id, $ambiente, $tipo, $serie, $numero,
+        $db->prepare('INSERT INTO emision_documentos (restaurante_id,pedido_id,usuario_id,ambiente,tipo,serie,correlativo,intento,snapshot_json)
+            VALUES (?,?,?,?,?,?,?,?,?)')->execute([$restaurante_id, $pedido_id, $usuario_id, $ambiente, $tipo, $serie, $numero, $intento,
                 json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
         $id = (int)$db->lastInsertId();
         registrarAuditoria($db, 'Solicitó documento de ensayo', "Documento #$id · Pedido #$pedido_id · Sin nuevo cobro", true);
