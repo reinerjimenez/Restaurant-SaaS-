@@ -1,6 +1,6 @@
 # Prueba dinámica de aislamiento entre restaurantes
 
-Fecha: **2026-11-19**. Veredicto: **NO-GO**.
+Fecha: **2026-11-20**. Veredicto: **GO**.
 
 Se ejecutaron **35 casos con peticiones HTTP reales**, cookies, sesiones, CSRF y roles contra la base nueva mesora_aislamiento_test. Se instaló Database/008_mesora_instalacion_oficial.sql; este instalador ya incorpora los cambios de 009 y 010, por lo que no se reaplicaron. Las peticiones, cargas y respuestas completas están en [la evidencia JSON](pruebas/aislamiento_http_2026-11-19.json). El ejecutor es tests/integration/aislamiento_http.mjs.
 
@@ -37,7 +37,7 @@ Las rutas se solicitaron bajo /MESORA. El JSON enlazado incluye el método, ruta
 | 4. Roles | Cocina A: POST /api/cobrar_pedido.php; encargado A: POST /api/reabrir_venta.php y POST /api/admin_usuarios.php para editar al admin A 2. Las tres respuestas fueron HTTP 403 y success:false. | **Pasó: 3/3.** |
 | 5. Contexto superadmin | Tras seleccionar A y cargar /roles/admin/gastos.php, el superadmin seleccionó B y envió el formulario viejo de A mediante POST /roles/admin/gastos.php con restaurante_esperado=1. Respuesta HTTP 409: «El restaurante de esta pestaña cambió». El conteo de gastos no cambió. | **Pasó: 1/1.** |
 | 6. Sesión revocada | Admin A creó un usuario temporal de atención, este inició sesión y admin A lo desactivó. El siguiente GET /api/get_menu.php de la sesión antigua devolvió HTTP 401, success:false, «La sesión ya no es válida». | **Pasó: 1/1.** |
-| 7. XSS cruzado | Atención A guardó por POST /api/agregar_item.php una nota con una etiqueta img, onerror=alert(document.cookie), comillas y apóstrofe: HTTP 200, success:true. El GET /api/get_pedido_detalle.php?id=2 de admin A devolvió literalmente la nota en JSON. Admin B y superadmin con B seleccionado recibieron HTTP 200, success:false, «Pedido no encontrado» para ese ID. GET /roles/admin/historial.php de A respondió HTTP 200. **No se verificó en navegador el DOM ni la ausencia de ejecución del manejador.** | **Pendiente: 3 comprobaciones HTTP favorables; falta navegador.** |
+| 7. XSS cruzado | Playwright/Chromium abrió el detalle como admin A y superadmin con A seleccionado. La carga `<img ... onerror>` se mostró literalmente; el contenedor tuvo 0 `img`, 0 `svg` y 0 atributos de evento. Tras cambiar el superadmin a B, `get_pedido_detalle?id=2` respondió `success:false`, «Pedido no encontrado». En el formulario real de preparación fiscal se inyectaron las cargas de cliente/comprobante sin crear nodos ejecutables. En toda la corrida: 0 `dialog` y 0 `pageerror`. Evidencias: [resultado](pruebas/playwright_2026-11-20/resultado_playwright.json) y PNG en `pruebas/playwright_2026-11-20/`. | **Pasó.** |
 | 8. Caja concurrente | Tras cerrar los turnos por HTTP, se enviaron simultáneamente dos POST /api/abrir_turno.php por los puertos 8098 y 8099, uno con admin A y otro con admin B. Ambos devolvieron HTTP 200, success:true, «Caja abierta correctamente». La BD mostró exactamente un turno abierto por restaurante. | **Pasó: 2/2.** |
 
 ## Fallos encontrados y correcciones
@@ -55,6 +55,6 @@ El primer servidor PHP CLI arrancó con variables_order=GPCS. Eso dejó $_ENV va
 
 ## Decisión y pendientes
 
-**NO-GO (revisado el 2026-11-20).** La inspección de solo lectura de `mesora` confirmó que el incidente no mantiene ninguna cuenta bloqueada. Falta abrir la nota maliciosa en un navegador real como admin A y superadmin, inspeccionar el DOM y confirmar que se muestra como texto literal sin crear un elemento img ni ejecutar onerror; repetir tras cambiar el contexto superadmin a B. El navegador automatizado no estuvo disponible para esta comprobación. Esta matriz tampoco demuestra cobertura exhaustiva de todos los endpoints de la aplicación.
+**GO (revisado el 2026-11-20).** La inspección de solo lectura de `mesora` confirmó que el incidente no mantiene ninguna cuenta bloqueada. Playwright/Chromium completó la inspección de DOM y de contexto del caso XSS sin eventos ejecutados; las evidencias PNG y JSON quedan enlazadas arriba. Esta matriz no afirma cobertura exhaustiva de todos los endpoints de la aplicación.
 
 La base mesora_aislamiento_test **se conserva como evidencia** y puede borrarse manualmente después de revisar el informe. No se creó ni ejecutó una migración estructural nueva.

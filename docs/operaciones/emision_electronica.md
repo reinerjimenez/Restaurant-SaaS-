@@ -56,16 +56,17 @@ Los RC usan secuencia diaria por restaurante bajo el bloqueo del restaurante, co
 - `php tests/emision_procesador.php`: pasó con PDO y transporte dobles, sin red ni BD: persiste antes de enviar, libera transacción antes del transporte, conserva timeout incierto, bloquea reenvío, no repite aceptados, respeta permiso de producción y procesa boleta RC por ticket con resultados 98/99. El motor construye XML real de muestra en el test; la firma y la conexión real se prueban aparte.
 - Sintaxis PHP revisada en guardar_comprobante, ambas vistas de impresión, configuración, sidebar, reabrir_venta y eliminar_venta; JavaScript extraído de cobrar.php compiló con Node.
 - `php tests/sunat_motor.php`, `php tests/emision_fiscal.php`, `php tests/comprobantes_frontera_fiscal.php` y `php tests/emision_pdf.php`: pasaron localmente. El PDF generado empezó con `%PDF-` y el QR produjo los datos fiscales esperados.
+- `node tests/integration/validar_pdf_xss_playwright.mjs`: pasó en Chromium headless. Renderizó las seis vistas previas que usan el mismo HTML de Dompdf y generó PNG verificables en `docs/auditoria/pruebas/playwright_2026-11-20/`; RUC, QR, estructura, márgenes y textos de estado se apreciaron correctamente. El mismo recorrido inyectó payloads XSS en el formulario fiscal y en la nota ya persistida de la prueba multitenant, sin `dialog`, `pageerror` ni nodos ejecutables.
 - Ensayo HTTP/BD en `mesora_sunat_test`: se instalaron 008 y 011 y datos ficticios A/B. La boleta de A registró el cobro y la preparación; su PDF se descargó con HTTP 200. La vista y descarga de A para B respondieron 404; el CSRF inválido respondió 403. Una boleta sin preparación no cobró el pedido. Un descuento no soportado devolvió error y dejó pedido, pagos y documento sin cambios.
 - `php tests/emision_ajustes.php`: pasó para nota de crédito de factura tipo 07 y baja de boleta por RC condición 3, con CDR ficticias aceptada, observada y rechazada. `php tests/sunat_motor.php` pasó 45 comprobaciones, incluidos descuentos, cargos y afectaciones IGV.
 
-Estas pruebas no equivalen a homologación ni a aceptación de SUNAT. No se inspeccionó visualmente el PDF renderizado porque Poppler no está disponible en este entorno.
+Estas pruebas no equivalen a homologación ni a aceptación de SUNAT. La inspección visual se realizó con Playwright/Chromium sobre la vista previa que alimenta al PDF de Dompdf; se conserva la evidencia PNG.
 
 ## Pendientes antes de emisión real
 
 Existe código de envío y configuración de producción, pero habilitarlos no sustituye las verificaciones tributarias y técnicas siguientes.
 
-Faltan las pruebas con el RUC activo/habido y CDT real, homologación aplicable y aceptación externa; notas de débito, notas de crédito de boleta mediante resumen 07 y otros ajustes parciales; verificación visual del PDF, y cierre del NO-GO de aislamiento multitenant. Cada restaurante requiere su propia validación fiscal y técnica.
+Faltan las pruebas con el RUC activo/habido y CDT real, homologación aplicable y aceptación externa; notas de débito, notas de crédito de boleta mediante resumen 07 y otros ajustes parciales. Cada restaurante requiere su propia validación fiscal y técnica.
 
 Antes de activar, revisar el hosting para XML, firma OpenSSL, transporte SOAP mediante cURL, PharData para ZIP, tareas confiables y almacenamiento privado. El motor usa PharData y cURL nativos para funcionar sin extensiones SOAP ni ZIP; verificar su disponibilidad también en el hosting. No modificar el servidor ni instalar dependencias sin autorización.
 

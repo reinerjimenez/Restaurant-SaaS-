@@ -40,6 +40,9 @@ foreach ($casos as $nombre => [$estado_documento, $datos]) {
     if (file_put_contents($directorio . '/' . $nombre . '.pdf', $bytes) !== strlen($bytes)) {
         throw new RuntimeException("No se pudo guardar el PDF: $nombre.");
     }
+    if (file_put_contents($directorio . '/' . $nombre . '.html', emision_pdf_vista_previa_html($estado_documento, $datos)) === false) {
+        throw new RuntimeException("No se pudo guardar la vista previa: $nombre.");
+    }
 }
 if (emision_pdf_estado($casos['boleta_rechazada'][0])[0] !== 'RECHAZADO POR SUNAT - SIN VALIDEZ TRIBUTARIA') {
     throw new RuntimeException('El PDF rechazado se anuncia incorrectamente.');

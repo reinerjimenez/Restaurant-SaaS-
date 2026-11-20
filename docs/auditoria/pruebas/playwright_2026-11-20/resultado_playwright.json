@@ -1,0 +1,58 @@
+{
+  "base": "http://127.0.0.1:8098/MESORA",
+  "pdf": [
+    {
+      "archivo": "boleta_descuento.pdf",
+      "png": "boleta_descuento.png",
+      "texto_visiblemente_renderizado": true
+    },
+    {
+      "archivo": "boleta_pendiente.pdf",
+      "png": "boleta_pendiente.png",
+      "texto_visiblemente_renderizado": true
+    },
+    {
+      "archivo": "boleta_prueba.pdf",
+      "png": "boleta_prueba.png",
+      "texto_visiblemente_renderizado": true
+    },
+    {
+      "archivo": "boleta_rechazada.pdf",
+      "png": "boleta_rechazada.png",
+      "texto_visiblemente_renderizado": true
+    },
+    {
+      "archivo": "factura_aceptada.pdf",
+      "png": "factura_aceptada.png",
+      "texto_visiblemente_renderizado": true
+    },
+    {
+      "archivo": "factura_cargo.pdf",
+      "png": "factura_cargo.png",
+      "texto_visiblemente_renderizado": true
+    }
+  ],
+  "xss": {
+    "admin_a": {
+      "texto": "2\n        \n            \n            Comer aquí\n        \n        Mesa 11x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.00TotalS/ 100.00 Añadir más platos Cobrar pedido",
+      "imagenes": 0,
+      "svgs": 0,
+      "etiquetasInyectadas": 0
+    },
+    "superadmin_a": {
+      "texto": "2\n        \n            \n            Comer aquí\n        \n        Mesa 11x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.001x Producto A 2 TEST· Valor A 2 TEST <img src=x onerror=alert(document.cookie)> \" 'S/ 10.00TotalS/ 100.00 Añadir más platos Cobrar pedido",
+      "imagenes": 0,
+      "svgs": 0,
+      "etiquetasInyectadas": 0
+    },
+    "superadmin_b": {
+      "respuesta": "{\"success\":false,\"data\":null,\"message\":\"Pedido no encontrado\"}"
+    },
+    "campos_comprobante": {
+      "valor_literal": "<img src=x onerror=alert(document.cookie)> \" ' <svg/onload=alert(1)>",
+      "nodos_ejecutables": 0
+    }
+  },
+  "eventos": [],
+  "estado": "OK"
+}

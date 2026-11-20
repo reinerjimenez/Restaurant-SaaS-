@@ -77,8 +77,8 @@ function emision_pdf_estado(array $documento): array {
     return ['PENDIENTE DE ACEPTACIÓN SUNAT', 'warning'];
 }
 
-/** Genera en memoria el PDF; su acceso se controla en api/descargar_emision.php. */
-function emision_generar_pdf(array $documento, array $snapshot): string {
+/** Construye la vista previa que comparte exactamente el contenido del PDF. */
+function emision_pdf_vista_previa_html(array $documento, array $snapshot): string {
     foreach (['emisor', 'cliente', 'items', 'total', 'fecha', 'tipo'] as $campo) {
         if (!array_key_exists($campo, $snapshot)) throw new DomainException('Datos fiscales incompletos para el PDF.');
     }
@@ -131,6 +131,12 @@ function emision_generar_pdf(array $documento, array $snapshot): string {
         . '" alt="Código QR"><br><small>Consulta mediante QR</small></td><td class="footer">'
         . ($mensaje !== '' ? emision_pdf_html($mensaje) . '<br>' : '')
         . 'Representación impresa generada por MESORA. La validez tributaria depende exclusivamente de la CDR SUNAT y del estado indicado arriba.</td></tr></table></body></html>';
+    return $html;
+}
+
+/** Genera en memoria el PDF; su acceso se controla en api/descargar_emision.php. */
+function emision_generar_pdf(array $documento, array $snapshot): string {
+    $html = emision_pdf_vista_previa_html($documento, $snapshot);
     $opciones = new Options();
     $opciones->set('isRemoteEnabled', false);
     $opciones->set('isHtml5ParserEnabled', true);
