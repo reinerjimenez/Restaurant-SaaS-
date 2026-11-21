@@ -10,6 +10,8 @@ graphify-out/.graphify*
 # Assets generados / cache
 assets/logos/
 docs.zip
+node_modules/
+debug.log
 tmp/sunat_sessions/
 tmp/aislamiento_sessions/
 tmp/pdfs/
