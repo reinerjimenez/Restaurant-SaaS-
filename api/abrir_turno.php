@@ -15,7 +15,11 @@ $db = getDB();
 try {
     $db->beginTransaction();
     bloquear_restaurante($db, $restaurante_id);
-    if (turno_abierto($db, $restaurante_id)) {
+    // Primera lectura consistente tras bloquear el restaurante. Un FOR UPDATE
+    // sin turno abierto bloquea rangos que pueden cruzarse entre restaurantes.
+    $turno = $db->prepare('SELECT 1 FROM turnos WHERE restaurante_id = ? AND fin IS NULL LIMIT 1');
+    $turno->execute([$restaurante_id]);
+    if ($turno->fetchColumn()) {
         throw new DomainException('Ya existe una caja abierta en este momento.');
     }
     $db->prepare('INSERT INTO turnos (restaurante_id, usuario_id, inicio) VALUES (?, ?, NOW())')
