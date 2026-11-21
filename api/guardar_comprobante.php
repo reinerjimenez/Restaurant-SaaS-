@@ -69,9 +69,11 @@ try {
             'pedido_id' => $pedido_id, 'tipo' => $tipo, 'tipo_documento' => $tipo_documento,
             'numero_documento' => $numero_documento, 'nombre' => $datos['nombre_cliente'], 'direccion' => $datos['direccion'],
         ]);
-        registrarAuditoria($db, 'Cobró y preparó emisión', "Pedido #$pedido_id · Emisión #$emision_id · $modo_emision · Pendiente de procesamiento", true);
+        $monto = decimal_centimos($total);
+        registrarAuditoria($db, 'Cobró y preparó emisión',
+            "Pedido #$pedido_id · Turno #{$turno['id']} · S/ 0.00 → S/ $monto · Emisión #$emision_id · $modo_emision", true);
         $db->commit();
-        jsonResponse(true, ['emision_id' => $emision_id, 'total_cobrado' => decimal_centimos($total)],
+        jsonResponse(true, ['emision_id' => $emision_id, 'total_cobrado' => $monto],
             $modo_emision === 'pruebas' ? 'Cobro registrado y documento de ensayo preparado. Sin validez tributaria; no se envió a SUNAT.'
                 : 'Cobro registrado. Emisión pendiente de envío y aceptación SUNAT.');
     }

@@ -17,6 +17,8 @@
 
 Referencia: [exportación e importación de phpMyAdmin](https://docs.phpmyadmin.net/en/master/faq.html).
 
+Si el origen tiene aplicada la migración 019, verifica que el respaldo incluya los dos disparadores de `auditoria`. Si el procedimiento de exportación los excluye, ejecuta 019 manualmente después de importar los datos en el destino vacío. La cuenta de ejecución de la aplicación debe carecer de permisos de DDL sobre la bitácora. En la copia de ensayo, comprueba que se puede insertar un evento y que los disparadores rechazan editarlo o borrarlo.
+
 ## Restauración de ensayo y conciliación
 
 1. Preparar una base **vacía y aislada**, con cuenta de prueba sin permisos sobre producción. Deshabilitar integraciones externas, envíos y credenciales reales en la copia de aplicación. Verificar servidor/base al iniciar y justo antes de importar.

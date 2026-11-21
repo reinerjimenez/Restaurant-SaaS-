@@ -2,6 +2,7 @@
 -- Esquema base 002 con cambios finales de 004, 006, 011, 013, 015 y 017 integrados.
 -- MariaDB 10.4 / InnoDB. Importar una sola vez en phpMyAdmin.
 -- No aplicar despues 001-007, 011, 013, 015 ni 017. No contiene DROP ni datos demo.
+-- La protección adicional de auditoría (019) requiere permiso TRIGGER y se instala por separado.
 -- No sirve para actualizar una base existente ni reparar XAMPP.
 -- MariaDB confirma DDL por sentencia: ante fallo, usar otra base vacia.
 
