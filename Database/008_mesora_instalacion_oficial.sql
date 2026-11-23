@@ -1,7 +1,7 @@
 -- MESORA: instalador oficial completo para una base nueva y vacia.
--- Esquema base 002 con cambios finales de 004, 006, 011, 013, 015 y 017 integrados.
+-- Esquema base 002 con cambios finales de 004, 006, 011, 013, 015, 017 y 021 integrados.
 -- MariaDB 10.4 / InnoDB. Importar una sola vez en phpMyAdmin.
--- No aplicar despues 001-007, 011, 013, 015 ni 017. No contiene DROP ni datos demo.
+-- No aplicar despues 001-007, 011, 013, 015, 017 ni 021. No contiene DROP ni datos demo.
 -- La protección adicional de auditoría (019) requiere permiso TRIGGER y se instala por separado.
 -- No sirve para actualizar una base existente ni reparar XAMPP.
 -- MariaDB confirma DDL por sentencia: ante fallo, usar otra base vacia.
@@ -512,12 +512,47 @@ CREATE TABLE `emision_ajustes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
+-- Conexiones y referencias de NubeFacT; 021 solo para instalaciones existentes.
+CREATE TABLE `emision_nubefact_config` (
+  `restaurante_id` int(11) NOT NULL,
+  `ambiente` enum('pruebas','produccion') NOT NULL,
+  `ruc` char(11) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `ruc_produccion` varchar(11) CHARACTER SET ascii COLLATE ascii_bin GENERATED ALWAYS AS (IF(`ambiente` = 'produccion', RTRIM(`ruc`), NULL)) STORED,
+  `ruta` varchar(512) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `ruta_hash` binary(32) NOT NULL,
+  `token_cifrado` varbinary(1024) NOT NULL,
+  `serie_boleta` char(4) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `serie_factura` char(4) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `correlativo_boleta` int unsigned NOT NULL DEFAULT 0,
+  `correlativo_factura` int unsigned NOT NULL DEFAULT 0,
+  `habilitado` tinyint(1) NOT NULL DEFAULT 0,
+  `verificado_en` datetime DEFAULT NULL,
+  PRIMARY KEY (`restaurante_id`, `ambiente`),
+  UNIQUE KEY `uk_nubefact_ruta` (`ruta_hash`),
+  UNIQUE KEY `uk_nubefact_serie_boleta` (`ruc_produccion`, `serie_boleta`),
+  UNIQUE KEY `uk_nubefact_serie_factura` (`ruc_produccion`, `serie_factura`),
+  CONSTRAINT `fk_nubefact_config_restaurante` FOREIGN KEY (`restaurante_id`) REFERENCES `restaurantes` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `emision_nubefact_documentos` (
+  `documento_id` bigint unsigned NOT NULL,
+  `restaurante_id` int(11) NOT NULL,
+  `pdf_url` varchar(2048) DEFAULT NULL,
+  `xml_url` varchar(2048) DEFAULT NULL,
+  `cdr_url` varchar(2048) DEFAULT NULL,
+  `referencia_ajuste` varchar(250) DEFAULT NULL,
+  PRIMARY KEY (`documento_id`),
+  KEY `idx_nubefact_documentos_restaurante` (`restaurante_id`, `documento_id`),
+  CONSTRAINT `fk_nubefact_documentos_origen` FOREIGN KEY (`documento_id`) REFERENCES `emision_documentos` (`id`),
+  CONSTRAINT `fk_nubefact_documentos_restaurante` FOREIGN KEY (`restaurante_id`) REFERENCES `restaurantes` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- Unico dato inicial: superadmin sin restaurante asignado.
 INSERT INTO `usuarios` (`restaurante_id`, `nombre`, `email`, `password`, `rol`, `activo`, `session_version`)
 VALUES (NULL, 'Super Admin', 'admin@mesora.local',
   '$2y$10$603N.8bo09r20VUwDGo/VOoJq8G62j1SOYwlfhHGHNSTS0sM5QdCq', 'superadmin', 1, 1);
 
--- Comprobaciones manuales: 1 superadmin, 1 usuario, 0 restaurantes, 24 tablas.
+-- Comprobaciones manuales: 1 superadmin, 1 usuario, 0 restaurantes, 26 tablas.
 SELECT COUNT(*) AS superadmins FROM `usuarios` WHERE `rol` = 'superadmin';
 SELECT COUNT(*) AS usuarios_total FROM `usuarios`;
 SELECT COUNT(*) AS restaurantes_total FROM `restaurantes`;

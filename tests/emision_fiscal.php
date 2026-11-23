@@ -48,6 +48,7 @@ $input=array_merge($cliente,['pedido_id'=>7,'tipo'=>'boleta']);
 $pasos=[['sql'=>'restaurantes','params'=>[1],'columna'=>1],
     ['sql'=>'pedidos WHERE id = ? AND restaurante_id = ?','params'=>[7,1], 'fila'=>['id'=>7,'estado'=>'cobrado']],
     ['sql'=>'emision_config WHERE restaurante_id = ? FOR UPDATE','params'=>[1],'fila'=>$config],
+    ['sql'=>'emision_nubefact_config','columna'=>0],
     ['sql'=>'emision_documentos WHERE restaurante_id = ? AND pedido_id = ? AND ambiente = ?', 'params'=>[1,7,'pruebas'],
         'fila'=>['id'=>9,'tipo'=>'boleta','snapshot_json'=>json_encode(['cliente'=>$cliente])]]];
 $idempotente=new ConexionFiscalPrueba($pasos);

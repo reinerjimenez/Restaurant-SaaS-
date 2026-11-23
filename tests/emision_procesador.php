@@ -40,6 +40,14 @@ try {
     putenv('SUNAT_1_USUARIO=20100066603ENSAYO');
     $db=new ConexionProcesador(['estado'=>'pendiente','ruc_config'=>'20100066603','snapshot_json'=>json_encode($snapshot),'xml_firmado'=>sunat_generar_invoice($snapshot)]);
     $envios=0;
+    $db->fila['snapshot_json'] = json_encode($snapshot + ['proveedor'=>'nubefact'], JSON_THROW_ON_ERROR);
+    try {
+        emision_procesar_real($db, 1, 1, false, function () use (&$envios) { $envios++; });
+        throw new RuntimeException('El envío directo aceptó un documento de NubeFacT.');
+    } catch (DomainException $e) {
+        comprobar_procesador(str_contains($e->getMessage(), 'proveedor') && $envios === 0 && !$db->inTransaction());
+    }
+    $db->fila['snapshot_json'] = json_encode($snapshot, JSON_THROW_ON_ERROR);
     $r=emision_procesar_real($db,1,1,false,function()use(&$envios,$db){
         comprobar_procesador(!$db->inTransaction() && $db->fila['estado']==='procesando');
         $envios++; throw new RuntimeException('timeout de ensayo');

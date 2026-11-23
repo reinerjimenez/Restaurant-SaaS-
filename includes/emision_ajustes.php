@@ -83,6 +83,10 @@ function emision_solicitar_ajuste(PDO $db, int $restaurante_id, int $usuario_id,
             $d['ambiente'] === 'pruebas' ? ['prueba_aceptada'] : ['aceptado','aceptado_observado'], true)) {
             throw new DomainException('Solo se ajusta un documento confirmado del mismo restaurante.');
         }
+        $origen = json_decode($d['snapshot_json'], true, 512, JSON_THROW_ON_ERROR);
+        if (($origen['proveedor'] ?? 'directo') !== 'directo') {
+            throw new DomainException('Tramita el ajuste en el portal del proveedor que emitió el comprobante.');
+        }
         if ($tipo === 'baja_boleta' && $d['tipo'] !== 'boleta') throw new DomainException('La baja por resumen corresponde solo a boletas.');
         if ($tipo === 'nota_credito' && $d['tipo'] !== 'factura') {
             throw new DomainException('La nota de crédito de boleta requiere resumen 07; este flujo aún no está disponible.');
@@ -90,7 +94,6 @@ function emision_solicitar_ajuste(PDO $db, int $restaurante_id, int $usuario_id,
         $st = $db->prepare('SELECT id FROM emision_ajustes WHERE documento_id=? AND restaurante_id=? LIMIT 1');
         $st->execute([$documento_id,$restaurante_id]);
         if ($st->fetchColumn()) throw new DomainException('Este documento ya tiene un ajuste iniciado.');
-        $origen = json_decode($d['snapshot_json'], true, 512, JSON_THROW_ON_ERROR);
         if ($d['ruc'] !== $origen['emisor']['ruc']) throw new DomainException('El RUC del original cambió.');
         $serie = null; $numero = null;
         if ($tipo === 'nota_credito') {

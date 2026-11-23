@@ -18,6 +18,7 @@ try {
     if ($lote) {
         if (!emision_produccion_autorizada((int)$argv[2])) throw new DomainException('Producción no autorizada para este restaurante.');
         $st=$db->prepare("SELECT id,estado FROM emision_documentos WHERE restaurante_id=? AND ambiente='produccion'
+            AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(snapshot_json, '$.proveedor')), 'directo') = 'directo'
             AND estado IN ('pendiente','procesando','incierto','pendiente_ticket') ORDER BY id LIMIT 20");
         $st->execute([(int)$argv[2]]);
         foreach ($st->fetchAll() as $d) {

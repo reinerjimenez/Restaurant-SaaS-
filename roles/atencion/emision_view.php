@@ -2,6 +2,7 @@
 require_once '../../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 require_once '../../includes/emision_fiscal.php';
+require_once '../../includes/nubefact_config.php';
 $db = getDB();
 $id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 if (!$id || !emision_esquema_disponible($db)) { http_response_code(404); exit('Documento no encontrado.'); }
@@ -13,7 +14,18 @@ try { $s = json_decode($d['snapshot_json'], true, 512, JSON_THROW_ON_ERROR); }
 catch (Throwable $e) { error_log('Documento fiscal con snapshot ilegible.'); http_response_code(500); exit('No se pudo mostrar el documento.'); }
 $e = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 $aceptado = $d['ambiente'] === 'produccion' && in_array($d['estado'], ['aceptado','aceptado_observado'], true);
-$puede_ajustar = in_array($_SESSION['rol'] ?? '', ['admin','superadmin'], true)
+$es_nubefact = ($s['proveedor'] ?? 'directo') === 'nubefact';
+$es_prueba = $d['ambiente'] === 'pruebas';
+$archivos_nubefact = null;
+if ($es_nubefact && nubefact_esquema_disponible($db)) {
+    $stProveedor = $db->prepare('SELECT pdf_url,xml_url,cdr_url,referencia_ajuste FROM emision_nubefact_documentos
+        WHERE documento_id=? AND restaurante_id=?');
+    $stProveedor->execute([$id, (int)$_SESSION['restaurante_id']]);
+    $archivos_nubefact = $stProveedor->fetch() ?: null;
+}
+$descarga_nubefact = $es_nubefact && ($aceptado || ($es_prueba && $d['estado'] === 'prueba_aceptada'));
+$admin_fiscal = in_array($_SESSION['rol'] ?? '', ['admin','superadmin'], true);
+$puede_ajustar = !$es_nubefact && $admin_fiscal
     && ($aceptado || ($d['ambiente'] === 'pruebas' && $d['estado'] === 'prueba_aceptada'));
 $ajuste = null;
 if ($puede_ajustar) {
@@ -32,9 +44,16 @@ require_once '../../includes/header.php';
 <div class="page-content">
     <div class="card">
         <h1><?= $aceptado ? 'Detalle de emisión electrónica' : 'Preparación de emisión electrónica' ?></h1>
-        <p role="status"><strong><?= $e($d['ambiente']) ?> · <?= $e($d['estado']) ?></strong></p>
-        <?php if (!$aceptado): ?><p>Esta vista no acredita aceptación SUNAT. Los documentos de pruebas no tienen validez tributaria.</p><?php endif; ?>
-        <p>Descarga la representación PDF con QR para entregar o conservar el documento.</p>
+        <p role="status"><strong><?= $es_nubefact ? 'NubeFacT · ' : '' ?><?= $es_prueba ? 'Pruebas' : 'Producción' ?> · <?= $e([
+            'pendiente'=>'Pendiente de envío', 'procesando'=>'En proceso', 'pendiente_ticket'=>'Pendiente de confirmación',
+            'incierto'=>'En revisión', 'aceptado'=>'Aceptado', 'aceptado_observado'=>'Aceptado con observaciones',
+            'rechazado'=>'Rechazado', 'prueba_aceptada'=>'Ensayo aceptado', 'error'=>'Error',
+        ][$d['estado']] ?? $d['estado']) ?></strong></p>
+        <?php if ($es_prueba): ?>
+            <p>Documento de ensayo, sin validez tributaria. No lo entregues al cliente.</p>
+        <?php elseif (!$aceptado): ?>
+            <p>La aceptación fiscal debe confirmarse antes de entregar el comprobante.</p>
+        <?php endif; ?>
         <h2><?= $e($s['emisor']['razon_social']) ?></h2>
         <p>RUC <?= $e($s['emisor']['ruc']) ?> · <?= $e($s['emisor']['direccion']) ?></p>
         <p><?= $e($d['tipo']) ?> · <?= $e($d['serie'] . '-' . $d['correlativo']) ?> · Fecha <?= $e($s['fecha']) ?></p>
@@ -44,15 +63,53 @@ require_once '../../includes/header.php';
         </tbody></table></div>
         <p><strong>Total: S/ <?= $e($s['total']) ?></strong> · Tasa registrada: <?= $e($s['tasa_igv']) ?> %</p>
         <p><?= $e($d['respuesta_mensaje']) ?></p>
+        <?php if (!$es_nubefact || ($descarga_nubefact && $archivos_nubefact)): ?>
         <form method="post" action="<?= $e(BASE_URL) ?>/api/descargar_emision.php">
             <input type="hidden" name="csrf_token" value="<?= $e(getCsrfToken()) ?>"><?= campos_contexto_restaurante() ?>
             <input type="hidden" name="id" value="<?= (int)$d['id'] ?>">
-            <button class="btn btn-ghost" style="min-height:44px" name="archivo" value="xml">Descargar XML</button>
-            <button class="btn btn-ghost" style="min-height:44px" name="archivo" value="cdr">Descargar CDR</button>
-            <button class="btn btn-ghost" style="min-height:44px" name="archivo" value="pdf">Descargar PDF con QR</button>
+            <?php foreach (['xml'=>'XML','cdr'=>'CDR','pdf'=>'PDF con QR'] as $archivo => $etiqueta): ?>
+                <?php if (!$es_nubefact || !empty($archivos_nubefact[$archivo . '_url'])): ?>
+                <button type="submit" class="btn btn-ghost" style="min-height:44px" name="archivo" value="<?= $e($archivo) ?>">Descargar <?= $e($etiqueta) ?></button>
+                <?php endif; ?>
+            <?php endforeach; ?>
         </form>
-        <button type="button" class="btn btn-ghost" style="min-height:44px" onclick="window.print()">Imprimir detalle de estado</button>
+        <?php endif; ?>
+        <?php if ($es_nubefact && !$archivos_nubefact): ?>
+            <p>El vínculo con el proveedor no está disponible. Contacta a soporte.</p>
+        <?php elseif ($es_nubefact && !in_array($d['estado'], ['rechazado','error'], true)): ?>
+            <?php if ($descarga_nubefact && (empty($archivos_nubefact['pdf_url']) || empty($archivos_nubefact['xml_url']) || empty($archivos_nubefact['cdr_url']))): ?>
+                <p>Puede haber archivos pendientes. Usa «Consultar estado» para actualizar su disponibilidad.</p>
+            <?php endif; ?>
+            <form method="post" action="<?= $e(BASE_URL) ?>/api/gestionar_nubefact.php" data-accion-nubefact>
+                <input type="hidden" name="csrf_token" value="<?= $e(getCsrfToken()) ?>"><?= campos_contexto_restaurante() ?>
+                <input type="hidden" name="id" value="<?= (int)$d['id'] ?>">
+                <input type="hidden" name="accion" value="<?= $d['estado'] === 'pendiente' ? 'enviar' : 'consultar' ?>">
+                <button type="submit" class="btn btn-ghost" style="min-height:44px"><?= $d['estado'] === 'pendiente' ? 'Enviar a NubeFacT' : 'Consultar estado' ?></button>
+            </form>
+        <?php endif; ?>
+        <?php if (!$es_nubefact): ?>
+            <button type="button" class="btn btn-ghost" style="min-height:44px" onclick="window.print()">Imprimir detalle de estado</button>
+        <?php endif; ?>
         <a class="btn btn-ghost" style="min-height:44px" href="dashboard.php">Volver</a>
+        <?php if ($es_nubefact && $aceptado && $archivos_nubefact): ?>
+        <section class="card" style="margin-top:18px" aria-label="Ajuste externo">
+            <h2>Ajuste en NubeFacT</h2>
+            <p>Tramita las notas o bajas en NubeFacT. Registrar la referencia del trámite no confirma su aceptación ni revierte el cobro.</p>
+            <?php if ($archivos_nubefact['referencia_ajuste']): ?>
+                <p>Referencia registrada: <?= $e($archivos_nubefact['referencia_ajuste']) ?></p>
+            <?php elseif ($admin_fiscal): ?>
+                <form method="post" action="<?= $e(BASE_URL) ?>/api/gestionar_nubefact.php" data-accion-nubefact>
+                    <input type="hidden" name="csrf_token" value="<?= $e(getCsrfToken()) ?>"><?= campos_contexto_restaurante() ?>
+                    <input type="hidden" name="id" value="<?= (int)$d['id'] ?>">
+                    <input type="hidden" name="accion" value="conciliar">
+                    <label for="referencia-nubefact" class="form-label">Referencia del ajuste</label>
+                    <input type="text" id="referencia-nubefact" name="referencia" class="form-control" maxlength="120" required>
+                    <button type="submit" class="btn btn-primary" style="min-height:44px">Registrar referencia</button>
+                </form>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+        <?php if ($es_nubefact): ?><p id="estado-accion-nubefact" role="status"></p><?php endif; ?>
         <?php if ($puede_ajustar): ?>
         <section class="card" style="margin-top:18px" aria-label="Ajuste fiscal">
             <h2>Ajuste fiscal</h2>
@@ -79,6 +136,31 @@ require_once '../../includes/header.php';
         <?php endif; ?>
     </div>
 </div>
+<?php if ($es_nubefact): ?>
+<script>
+document.querySelectorAll('[data-accion-nubefact]').forEach(formulario => {
+    formulario.addEventListener('submit', async event => {
+        event.preventDefault();
+        const boton = formulario.querySelector('button');
+        const resultado = document.getElementById('estado-accion-nubefact');
+        boton.disabled = true;
+        resultado.textContent = 'Procesando solicitud…';
+        try {
+            const respuesta = await fetch(formulario.action, {
+                method: 'POST',
+                headers: {'Accept':'application/json', 'X-Requested-With':'XMLHttpRequest'},
+                body: new URLSearchParams(new FormData(formulario))
+            });
+            if (respuesta.ok && respuesta.redirected) { window.location.reload(); return; }
+            const datos = await respuesta.json();
+            if (datos.success) { window.location.reload(); return; }
+            resultado.textContent = datos.message || 'No se pudo completar la solicitud.';
+        } catch (_) { resultado.textContent = 'No se confirmó la solicitud. Recarga la página para revisar el estado.'; }
+        boton.disabled = false;
+    });
+});
+</script>
+<?php endif; ?>
 <?php if ($puede_ajustar && !$ajuste): ?>
 <script>
 async function enviarAjuste(event) {

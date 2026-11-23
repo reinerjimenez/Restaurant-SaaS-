@@ -6,6 +6,7 @@ require_once '../config/db.php';
 requireRole(['atencion', 'admin', 'encargado', 'superadmin']);
 require_once '../config/finanzas.php';
 require_once '../includes/emision_fiscal.php';
+require_once '../includes/nubefact_procesador.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(false, null, 'Método no permitido');
 
@@ -52,6 +53,25 @@ try {
     $pagos = normalizar_pagos($input['pagos'] ?? null);
     $db->beginTransaction();
     bloquear_restaurante($db, $restaurante_id);
+    if ($es_fiscal_pruebas && nubefact_esquema_disponible($db)) {
+        $previo = $db->prepare("SELECT d.id,d.estado,d.tipo,d.snapshot_json,p.total
+            FROM emision_documentos d JOIN emision_nubefact_documentos n
+            ON n.documento_id=d.id AND n.restaurante_id=d.restaurante_id
+            JOIN pedidos p ON p.id=d.pedido_id AND p.restaurante_id=d.restaurante_id
+            WHERE d.pedido_id=? AND d.restaurante_id=? AND p.estado='cobrado' ORDER BY d.id DESC LIMIT 1");
+        $previo->execute([$pedido_id,$restaurante_id]);
+        if ($existente = $previo->fetch()) {
+            $cliente = json_decode($existente['snapshot_json'],true,512,JSON_THROW_ON_ERROR)['cliente'];
+            if ($existente['tipo'] !== $tipo || $cliente['numero_documento'] !== $numero_documento
+                || $cliente['tipo_documento'] !== $tipo_documento || $cliente['nombre'] !== $datos['nombre_cliente']
+                || $cliente['direccion'] !== $datos['direccion']) {
+                throw new DomainException('Este pedido ya tiene un cobro y otro comprobante preparado. Revisa su historial.');
+            }
+            $db->commit();
+            jsonResponse(true,['emision_id'=>(int)$existente['id'],'total_cobrado'=>$existente['total'],
+                'estado_emision'=>$existente['estado']],'El pedido ya está cobrado. Se conservó el comprobante existente.');
+        }
+    }
     $turno = exigir_turno_abierto($db, $restaurante_id);
     $pedido = bloquear_pedido($db, $restaurante_id, $pedido_id, 'activo');
     [$total, $descuento, $cargo_extra] = calcular_cobro($db, $pedido, $input, $pagos);
@@ -73,6 +93,18 @@ try {
         registrarAuditoria($db, 'Cobró y preparó emisión',
             "Pedido #$pedido_id · Turno #{$turno['id']} · S/ 0.00 → S/ $monto · Emisión #$emision_id · $modo_emision", true);
         $db->commit();
+        $estado_nubefact = null;
+        try {
+            $estado_nubefact = nubefact_procesar($db,$restaurante_id,$emision_id,false);
+        } catch (Throwable $e) {
+            // El cobro ya está confirmado. Una falla posterior no autoriza repetirlo.
+            error_log('No se completó el procesamiento posterior al cobro.');
+            $estado_nubefact = 'pendiente_revision';
+        }
+        if ($estado_nubefact !== null) {
+            jsonResponse(true,['emision_id'=>$emision_id,'total_cobrado'=>$monto,'estado_emision'=>$estado_nubefact],
+                'Cobro registrado. Revisa el estado y los archivos del comprobante en el detalle.');
+        }
         jsonResponse(true, ['emision_id' => $emision_id, 'total_cobrado' => $monto],
             $modo_emision === 'pruebas' ? 'Cobro registrado y documento de ensayo preparado. Sin validez tributaria; no se envió a SUNAT.'
                 : 'Cobro registrado. Emisión pendiente de envío y aceptación SUNAT.');

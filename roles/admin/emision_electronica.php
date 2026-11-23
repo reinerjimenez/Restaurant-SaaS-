@@ -43,6 +43,7 @@ require_once '../../includes/header.php';
 <div class="page-content">
     <h1>Emisión electrónica — preparación</h1>
     <p>Configura los documentos de este restaurante. Los ensayos no tienen validez tributaria; producción requiere habilitación individual en el servidor.</p>
+    <p><a href="nubefact_config.php" class="btn btn-ghost" style="min-height:44px">Configurar NubeFacT</a></p>
     <p><a href="config_facturacion.php" class="btn btn-ghost" style="min-height:44px">Volver a datos del restaurante</a></p>
     <?php if (!$disponible): ?>
         <div class="card" role="alert">Creé el script Database/011_emision_electronica.sql. Ejecútalo manualmente en phpMyAdmin antes de probar este módulo.</div>
@@ -56,12 +57,12 @@ require_once '../../includes/header.php';
         <input type="hidden" name="accion" value="configurar">
         <label class="form-label" for="modo">Modo</label>
         <select id="modo" name="modo" class="form-control">
-            <?php foreach (['desactivado' => 'Desactivado', 'pruebas' => 'Pruebas sin envío SUNAT', 'produccion' => 'Producción (requiere autorización del servidor)'] as $valor => $etiqueta): ?>
+            <?php foreach (['desactivado' => 'Desactivado', 'pruebas' => 'Pruebas sin validez tributaria', 'produccion' => 'Producción (requiere autorización)'] as $valor => $etiqueta): ?>
             <option value="<?= $valor ?>" <?= ($cfg['modo'] ?? '') === $valor ? 'selected' : '' ?>><?= $etiqueta ?></option>
             <?php endforeach; ?>
         </select>
         <?php foreach (['ruc' => ['RUC',11], 'razon_social' => ['Razón social',200], 'direccion' => ['Dirección fiscal',300],
-            'ubigeo' => ['Ubigeo',6], 'serie_boleta' => ['Serie de boleta de ensayo',4], 'serie_factura' => ['Serie de factura de ensayo',4],
+            'ubigeo' => ['Ubigeo',6], 'serie_boleta' => ['Serie de boleta (flujo directo)',4], 'serie_factura' => ['Serie de factura (flujo directo)',4],
             'tasa_igv' => ['Tasa IGV validada por contador (%)',5]] as $campo => [$etiqueta,$largo]): ?>
             <label class="form-label" for="<?= $campo ?>"><?= $etiqueta ?></label>
             <input class="form-control" id="<?= $campo ?>" name="<?= $campo ?>" maxlength="<?= $largo ?>" value="<?= fiscal_html($cfg[$campo] ?? ['serie_boleta'=>'B001','serie_factura'=>'F001'][$campo] ?? '') ?>" required>
@@ -71,33 +72,28 @@ require_once '../../includes/header.php';
             <option value="">Selecciona el régimen de este restaurante</option>
             <?php foreach (['RER','RMT','GENERAL'] as $regimen): ?><option <?= ($cfg['regimen'] ?? '') === $regimen ? 'selected' : '' ?>><?= $regimen ?></option><?php endforeach; ?>
         </select>
-        <p>La producción requiere habilitación, certificado vigente, homologación y cierre de pendientes. No cargues Clave SOL ni certificados en este formulario.</p>
-        <button class="btn btn-primary" style="min-height:44px" type="submit">Guardar configuración de ensayo</button>
+        <p>NubeFacT utiliza sus propias series y requiere una conexión habilitada para este RUC. El flujo directo a SUNAT requiere su configuración de servidor. No cargues Clave SOL ni certificados en este formulario.</p>
+        <button class="btn btn-primary" style="min-height:44px" type="submit">Guardar datos fiscales</button>
     </form>
     <form method="post" class="card mb-20">
         <h2>Preparar boleta o factura</h2>
-        <p>Indica el ID de un pedido ya cobrado de este restaurante. No genera un segundo cobro. Una reemisión solo procede tras un rechazo conciliado y conserva el documento anterior.</p>
+        <p>Indica el ID de un pedido ya cobrado de este restaurante. No genera un segundo cobro. Revisa el comprobante en el historial para confirmar su estado.</p>
         <input type="hidden" name="csrf_token" value="<?= fiscal_html(getCsrfToken()) ?>">
         <?= campos_contexto_restaurante() ?>
         <input type="hidden" name="accion" value="solicitar">
         <label class="form-label" for="pedido_id">ID del pedido cobrado</label><input class="form-control" id="pedido_id" name="pedido_id" type="number" min="1" required>
-        <label class="form-label" for="tipo">Tipo</label><select class="form-control" id="tipo" name="tipo"><option value="boleta">Boleta de ensayo</option><option value="factura">Factura de ensayo</option></select>
+        <label class="form-label" for="tipo">Tipo</label><select class="form-control" id="tipo" name="tipo"><option value="boleta">Boleta</option><option value="factura">Factura</option></select>
         <label class="form-label" for="tipo_documento">Documento del cliente</label><select class="form-control" id="tipo_documento" name="tipo_documento"><option value="dni">DNI</option><option value="ruc">RUC</option></select>
         <?php foreach (['numero_documento'=>['Número de documento',11], 'nombre'=>['Nombre o razón social del cliente',200], 'direccion'=>['Dirección del cliente (obligatoria para factura)',300]] as $campo=>[$etiqueta,$largo]): ?>
         <label class="form-label" for="<?= $campo ?>"><?= $etiqueta ?></label><input class="form-control" id="<?= $campo ?>" name="<?= $campo ?>" maxlength="<?= $largo ?>" <?= $campo !== 'direccion' ? 'required' : '' ?>>
         <?php endforeach; ?>
-        <label class="form-label"><input type="checkbox" name="reemision" value="1"> Reemitir tras rechazo confirmado (nuevo número fiscal)</label>
-        <button type="submit" class="btn btn-primary" style="min-height:44px">Preparar documento de ensayo</button>
+        <label class="form-label"><input type="checkbox" name="reemision" value="1"> Flujo directo: reemitir tras rechazo confirmado (nuevo número fiscal)</label>
+        <button type="submit" class="btn btn-primary" style="min-height:44px">Preparar comprobante</button>
     </form>
-    <div class="card"><h2>Últimos 50 documentos</h2><div style="overflow-x:auto"><table class="table"><thead><tr><th>ID</th><th>Pedido</th><th>Ambiente</th><th>Número</th><th>Estado</th><th>Resultado</th><th>Archivos</th></tr></thead><tbody>
+    <div class="card"><h2>Últimos 50 documentos</h2><div style="overflow-x:auto"><table class="table"><thead><tr><th>ID</th><th>Pedido</th><th>Ambiente</th><th>Número</th><th>Estado</th><th>Resultado</th><th>Detalle y archivos</th></tr></thead><tbody>
     <?php foreach ($documentos as $d): ?><tr><td><?= (int)$d['id'] ?></td><td><?= (int)$d['pedido_id'] ?></td><td><?= fiscal_html($d['ambiente']) ?></td><td><?= fiscal_html($d['serie'] . '-' . $d['correlativo']) ?></td><td><?= fiscal_html($d['estado']) ?></td><td><?= fiscal_html($d['respuesta_mensaje']) ?></td><td>
-        <form method="post" action="<?= fiscal_html(BASE_URL) ?>/api/descargar_emision.php">
-            <input type="hidden" name="csrf_token" value="<?= fiscal_html(getCsrfToken()) ?>"><?= campos_contexto_restaurante() ?>
-            <input type="hidden" name="id" value="<?= (int)$d['id'] ?>">
-            <button type="submit" name="archivo" value="xml" class="btn btn-ghost" style="min-height:44px">XML</button>
-            <button type="submit" name="archivo" value="cdr" class="btn btn-ghost" style="min-height:44px">CDR</button>
-            <button type="submit" name="archivo" value="pdf" class="btn btn-ghost" style="min-height:44px">PDF con QR</button>
-        </form>
+        <a href="<?= fiscal_html(BASE_URL) ?>/roles/atencion/emision_view.php?id=<?= (int)$d['id'] ?>"
+            class="btn btn-ghost" style="min-height:44px">Ver comprobante</a>
     </td></tr><?php endforeach; ?>
     <?php if (!$documentos): ?><tr><td colspan="7">Aún no hay documentos.</td></tr><?php endif; ?>
     </tbody></table></div></div>

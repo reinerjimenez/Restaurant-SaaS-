@@ -2,6 +2,7 @@
 /** Preparación fiscal aislada por restaurante. No realiza cobros ni envíos reales. */
 require_once __DIR__ . '/../config/finanzas.php';
 require_once __DIR__ . '/sunat_motor.php';
+require_once __DIR__ . '/nubefact_config.php';
 
 /** Ensayo de firma, empaquetado y lectura de respuesta, enteramente local. */
 function emision_simular_documento(array $snapshot, string $p12, string $clave): array {
@@ -63,7 +64,7 @@ function fiscal_exigir_venta_modificable(PDO $db, int $restaurante_id, int $pedi
     if (!emision_esquema_disponible($db)) return;
     $st = $db->prepare('SELECT id FROM emision_documentos WHERE restaurante_id = ? AND pedido_id = ? LIMIT 1');
     $st->execute([$restaurante_id, $pedido_id]);
-    if ($st->fetchColumn()) throw new DomainException('Esta venta tiene un documento fiscal de ensayo. No se puede revertir localmente; conserva su evidencia.');
+    if ($st->fetchColumn()) throw new DomainException('Esta venta tiene un documento fiscal. Consulta su estado y el procedimiento de ajuste antes de revertir el cobro.');
 }
 
 function emision_validar_config(array $input): array {
@@ -91,13 +92,13 @@ function emision_validar_config(array $input): array {
 
 function emision_guardar_config(PDO $db, int $restaurante_id, array $input): void {
     $c = emision_validar_config($input);
-    if ($c['modo'] === 'produccion') {
-        if (!emision_produccion_autorizada($restaurante_id)) throw new DomainException('La producción de este restaurante aún no está autorizada en el servidor.');
-        emision_credenciales($restaurante_id);
-    }
     $db->beginTransaction();
     try {
         bloquear_restaurante($db, $restaurante_id);
+        if ($c['modo'] === 'produccion' && !emision_conexion_nubefact($db, $restaurante_id, $c, true)) {
+            if (!emision_produccion_autorizada($restaurante_id)) throw new DomainException('La producción de este restaurante aún no está autorizada en el servidor.');
+            emision_credenciales($restaurante_id);
+        }
         $st = $db->prepare('SELECT ruc, serie_boleta, serie_factura FROM emision_config WHERE restaurante_id = ? FOR UPDATE');
         $st->execute([$restaurante_id]);
         $anterior = $st->fetch();
@@ -119,6 +120,19 @@ function emision_guardar_config(PDO $db, int $restaurante_id, array $input): voi
         if ($db->inTransaction()) $db->rollBack();
         throw $e;
     }
+}
+
+/** Una conexión configurada nunca deriva silenciosamente a SUNAT directo. */
+function emision_conexion_nubefact(PDO $db, int $restaurante_id, array $fiscal, bool $bloquear = false): ?array {
+    $modo = $fiscal['modo'] ?? '';
+    if (!in_array($modo, ['pruebas', 'produccion'], true) || !nubefact_esquema_disponible($db)) return null;
+    $conexion = nubefact_config($db, $restaurante_id, $modo, $bloquear);
+    if (!$conexion) return null;
+    if ($conexion['ruc'] !== $fiscal['ruc'] || !nubefact_config_activa($conexion)) {
+        throw new DomainException('La conexión NubeFacT de este ambiente no está habilitada para el RUC del restaurante.');
+    }
+    nubefact_token($conexion);
+    return $conexion;
 }
 
 function emision_solicitar(PDO $db, int $restaurante_id, int $usuario_id, array $input): int {
@@ -155,7 +169,8 @@ function emision_solicitar(PDO $db, int $restaurante_id, int $usuario_id, array 
         if (!$c || $c['modo'] === 'desactivado') throw new DomainException('Activa y completa primero la configuración de emisión.');
         emision_validar_config($c);
         $ambiente = $c['modo'];
-        if ($ambiente === 'produccion') {
+        $conexion = emision_conexion_nubefact($db, $restaurante_id, $c, true);
+        if ($ambiente === 'produccion' && !$conexion) {
             if (!emision_produccion_autorizada($restaurante_id)) throw new DomainException('Producción no autorizada para este restaurante.');
             emision_credenciales($restaurante_id);
         }
@@ -164,6 +179,7 @@ function emision_solicitar(PDO $db, int $restaurante_id, int $usuario_id, array 
         $intento = 1;
         if ($existente = $st->fetch()) {
             if ($reemision) {
+                if ($conexion) throw new DomainException('Concilia el rechazo con el proveedor antes de emitir otro comprobante.');
                 if ($existente['estado'] !== 'rechazado') {
                     throw new DomainException('Solo se puede reemitir un documento rechazado y conciliado.');
                 }
@@ -211,20 +227,35 @@ function emision_solicitar(PDO $db, int $restaurante_id, int $usuario_id, array 
         $resumen['igv'] += ($cargo - $cargo_base) - ($descuento - $descuento_base);
         $resumen = array_map('decimal_centimos', $resumen);
         $columna = $tipo === 'factura' ? 'correlativo_factura' : 'correlativo_boleta';
-        if ($ambiente === 'pruebas') $columna .= '_pruebas';
-        $serie = $c[$tipo === 'factura' ? 'serie_factura' : 'serie_boleta'];
-        $numero = (int)$c[$columna] + 1;
+        if (!$conexion && $ambiente === 'pruebas') $columna .= '_pruebas';
+        $numeracion = $conexion ?? $c;
+        $serie = $numeracion[$tipo === 'factura' ? 'serie_factura' : 'serie_boleta'];
+        if (!$conexion && $ambiente === 'produccion' && nubefact_esquema_disponible($db)) {
+            nubefact_exigir_serie_directa_libre($db, $c['ruc'], $serie);
+        }
+        $numero = (int)$numeracion[$columna] + 1;
         if ($numero > 99999999) throw new DomainException('La serie de ensayo agotó su correlativo.');
         $snapshot = ['emisor' => array_intersect_key($c, array_flip(['ruc', 'razon_social', 'direccion', 'ubigeo', 'regimen'])),
             'tipo' => $tipo, 'serie' => $serie, 'correlativo' => $numero, 'fecha' => date('Y-m-d'), 'moneda' => 'PEN',
             'tasa_igv' => $c['tasa_igv'], 'cliente' => $cliente, 'items' => $items,
             'descuento' => $pedido['descuento'], 'cargo_extra' => $pedido['cargo_extra'], 'total' => $pedido['total'],
             'resumen_fiscal'=>$resumen];
-        $db->prepare("UPDATE emision_config SET $columna = ? WHERE restaurante_id = ?")->execute([$numero, $restaurante_id]);
+        if ($conexion) {
+            $snapshot['proveedor'] = 'nubefact';
+            nubefact_validar_emision($snapshot);
+            $db->prepare("UPDATE emision_nubefact_config SET $columna = ? WHERE restaurante_id = ? AND ambiente = ?")
+                ->execute([$numero, $restaurante_id, $ambiente]);
+        } else {
+            $db->prepare("UPDATE emision_config SET $columna = ? WHERE restaurante_id = ?")->execute([$numero, $restaurante_id]);
+        }
         $db->prepare('INSERT INTO emision_documentos (restaurante_id,pedido_id,usuario_id,ambiente,tipo,serie,correlativo,intento,snapshot_json)
             VALUES (?,?,?,?,?,?,?,?,?)')->execute([$restaurante_id, $pedido_id, $usuario_id, $ambiente, $tipo, $serie, $numero, $intento,
                 json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
         $id = (int)$db->lastInsertId();
+        if ($conexion) {
+            $db->prepare('INSERT INTO emision_nubefact_documentos (documento_id,restaurante_id) VALUES (?,?)')
+                ->execute([$id, $restaurante_id]);
+        }
         registrarAuditoria($db, 'Solicitó documento de ensayo', "Documento #$id · Pedido #$pedido_id · Sin nuevo cobro", true);
         if ($propia) $db->commit();
         return $id;

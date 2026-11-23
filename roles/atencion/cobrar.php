@@ -17,11 +17,18 @@ $db = getDB();
 $emisionPruebas = false;
 $emisionProduccion = false;
 if (emision_esquema_disponible($db)) {
-    $stEmision = $db->prepare('SELECT modo FROM emision_config WHERE restaurante_id = ?');
+    $stEmision = $db->prepare('SELECT modo,ruc FROM emision_config WHERE restaurante_id = ?');
     $stEmision->execute([(int)$restauranteId]);
-    $modoEmision = $stEmision->fetchColumn();
-    $emisionPruebas = $modoEmision === 'pruebas';
-    $emisionProduccion = $modoEmision === 'produccion' && emision_produccion_autorizada((int)$restauranteId);
+    $fiscal = $stEmision->fetch() ?: [];
+    $modoEmision = $fiscal['modo'] ?? '';
+    try {
+        $conexion = emision_conexion_nubefact($db,(int)$restauranteId,$fiscal);
+        $emisionPruebas = $modoEmision === 'pruebas';
+        $emisionProduccion = $modoEmision === 'produccion'
+            && ($conexion || emision_produccion_autorizada((int)$restauranteId));
+    } catch (DomainException $e) {
+        // La caja conserva el comprobante interno mientras la conexión fiscal esté pausada.
+    }
 }
 
 $stPed = $db->prepare("
@@ -112,7 +119,7 @@ require_once '../../includes/header.php';
                 <span class="metodo-nombre">Comprobante Simple</span>
             </label>
             <?php if ($emisionPruebas || $emisionProduccion): ?>
-            <p role="note"><?= $emisionPruebas ? 'Modo de ensayo: se registra el cobro real, pero el documento preparado no se envía a SUNAT ni tiene validez tributaria.' : 'La emisión queda pendiente hasta que el procesador confirme la aceptación SUNAT.' ?></p>
+            <p role="note"><?= $emisionPruebas ? 'Modo de ensayo: el cobro se registra en caja, pero el documento de prueba no tiene validez tributaria.' : 'Revisa la confirmación fiscal antes de entregar el comprobante.' ?></p>
             <label id="opc-boleta-label" class="metodo-item" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--radius-md);border:2px solid var(--border);transition:all .2s;" onclick="seleccionarTipoComp('boleta')">
                 <input type="radio" name="tipo_comp" value="boleta" id="opc-boleta" style="display:none;">
                 <div class="metodo-check" id="check-comp-boleta"><i class="fa-solid fa-check"></i></div>

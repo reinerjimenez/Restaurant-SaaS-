@@ -27,12 +27,15 @@ try {
     $st->execute([$id, $restaurante_id, 'pruebas', 'pruebas']);
     $d = $st->fetch();
     if (!$d) throw new DomainException('Documento de ensayo no disponible para este restaurante.');
+    $snapshot = json_decode($d['snapshot_json'], true, 512, JSON_THROW_ON_ERROR);
+    if (($snapshot['proveedor'] ?? 'directo') !== 'directo') {
+        throw new DomainException('Este documento de ensayo pertenece a un proveedor externo.');
+    }
     if ($d['estado'] === 'prueba_aceptada') {
         $db->commit();
         echo "Documento ya procesado como ensayo; no se repitió.\n";
         exit;
     }
-    $snapshot = json_decode($d['snapshot_json'], true, 512, JSON_THROW_ON_ERROR);
     $credenciales = emision_credenciales($restaurante_id);
     $p12 = file_get_contents($credenciales['p12_path']);
     if ($p12 === false) throw new DomainException('No se pudo leer el certificado de ensayo.');

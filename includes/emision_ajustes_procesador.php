@@ -11,7 +11,8 @@ function emision_procesar_ajuste_real(PDO $db, int $restaurante_id, int $id, boo
     $db->beginTransaction();
     try {
         bloquear_restaurante($db, $restaurante_id);
-        $st = $db->prepare("SELECT a.*,c.ruc,d.tipo AS tipo_original,d.estado AS estado_original FROM emision_ajustes a
+        $st = $db->prepare("SELECT a.*,c.ruc,d.tipo AS tipo_original,d.estado AS estado_original,
+            d.snapshot_json AS snapshot_original FROM emision_ajustes a
             JOIN emision_config c ON c.restaurante_id=a.restaurante_id
             JOIN emision_documentos d ON d.id=a.documento_id AND d.restaurante_id=a.restaurante_id
             WHERE a.id=? AND a.restaurante_id=? AND a.ambiente='produccion' AND c.modo='produccion' FOR UPDATE");
@@ -19,6 +20,10 @@ function emision_procesar_ajuste_real(PDO $db, int $restaurante_id, int $id, boo
         $a = $st->fetch();
         if (!$a || !in_array($a['estado_original'], ['aceptado','aceptado_observado'], true)) {
             throw new DomainException('Ajuste u original no disponible para este restaurante.');
+        }
+        $original = json_decode($a['snapshot_original'], true, 512, JSON_THROW_ON_ERROR);
+        if (($original['proveedor'] ?? 'directo') !== 'directo') {
+            throw new DomainException('El ajuste corresponde al proveedor que emitió el documento original.');
         }
         if (in_array($a['estado'], ['aceptado','aceptado_observado','rechazado'], true)) {
             $db->commit();

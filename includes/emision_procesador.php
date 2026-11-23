@@ -20,6 +20,10 @@ function emision_procesar_real(PDO $db, int $restaurante_id, int $id, bool $cons
         $st->execute([$id, $restaurante_id]);
         $d = $st->fetch();
         if (!$d) throw new DomainException('Documento no disponible para este restaurante en producción.');
+        $snapshot = json_decode($d['snapshot_json'], true, 512, JSON_THROW_ON_ERROR);
+        if (($snapshot['proveedor'] ?? 'directo') !== 'directo') {
+            throw new DomainException('Consulta este documento con el proveedor que lo emitió.');
+        }
         if (in_array($d['estado'], ['aceptado','aceptado_observado','rechazado'], true)) {
             $db->commit();
             return ['estado'=>$d['estado'], 'mensaje'=>'Documento ya conciliado; no se repitió el envío.'];
@@ -30,7 +34,6 @@ function emision_procesar_real(PDO $db, int $restaurante_id, int $id, bool $cons
         if ($consultar && !in_array($d['estado'], ['procesando','incierto','pendiente_ticket'], true)) {
             throw new DomainException('Solo se consultan documentos con envío iniciado o incierto.');
         }
-        $snapshot = json_decode($d['snapshot_json'], true, 512, JSON_THROW_ON_ERROR);
         if (substr($credenciales['usuario'],0,11) !== $snapshot['emisor']['ruc'] || $d['ruc_config'] !== $snapshot['emisor']['ruc']) {
             throw new DomainException('El RUC del documento no coincide con su configuración o usuario SOL.');
         }
