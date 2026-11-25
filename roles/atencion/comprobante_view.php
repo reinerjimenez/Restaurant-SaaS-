@@ -28,26 +28,10 @@ $comp = $st->fetch();
 
 if (!$comp) { header('Location: dashboard.php'); exit; }
 
+require_once '../../includes/comprobante_termico.php';
 $items = json_decode($comp['items_json'] ?? '[]', true) ?: [];
 $pagos = json_decode($comp['pagos_json'] ?? '[]', true) ?: [];
-
-// Agrupar items por nombre+opciones
-$itemsAgrupados = [];
-foreach ($items as $item) {
-    $key = ($item['producto_nombre'] ?? '') . '||' . ($item['opciones_texto'] ?? '');
-    if (isset($itemsAgrupados[$key])) {
-        $itemsAgrupados[$key]['cantidad'] += intval($item['cantidad']);
-        $itemsAgrupados[$key]['subtotal'] += floatval($item['subtotal']);
-    } else {
-        $itemsAgrupados[$key] = [
-            'nombre'   => $item['producto_nombre'] ?? '',
-            'opciones' => $item['opciones_texto']  ?? '',
-            'cantidad' => intval($item['cantidad']),
-            'precio'   => floatval($item['precio_unitario'] ?? 0),
-            'subtotal' => floatval($item['subtotal']),
-        ];
-    }
-}
+$itemsAgrupados = comprobante_agrupar_items($items);
 
 $pageTitle = 'Comprobante ' . htmlspecialchars($comp['numero_comprobante']);
 $extraCSS  = BASE_URL . '/assets/css/print.css';
@@ -63,9 +47,7 @@ require_once '../../includes/header.php';
         <a href="dashboard.php" class="btn btn-ghost btn-sm">
             <i class="fa-solid fa-arrow-left"></i> Volver
         </a>
-        <button class="btn btn-primario btn-sm" onclick="window.print()">
-            <i class="fa-solid fa-print"></i> Imprimir
-        </button>
+        <?php require '../../includes/comprobante_acciones_impresion.php'; ?>
         <?php if (in_array($_SESSION['rol'], ['admin','encargado','superadmin'])): ?>
         <a href="<?= BASE_URL ?>/roles/admin/ver_comprobante.php?id=<?= $comprobanteId ?>" class="btn btn-ghost btn-sm">
             <i class="fa-solid fa-eye"></i> Vista Admin
@@ -230,13 +212,12 @@ require_once '../../includes/header.php';
         <?php if (!empty($pagos)): ?>
         <div class="ticket-pagos ticket-section">
             <?php
-            $metodoLabel = ['efectivo'=>'Efectivo','yape'=>'Yape/Plin','transferencia'=>'Transferencia','tarjeta'=>'Tarjeta','otro'=>'Otro'];
             foreach ($pagos as $pago):
                 $metodo = $pago['metodo'] ?? 'otro';
                 $monto  = floatval($pago['monto'] ?? 0);
             ?>
             <div class="ticket-row">
-                <span class="label"><?= htmlspecialchars($metodoLabel[$metodo] ?? $metodo) ?>:</span>
+                <span class="label"><?= htmlspecialchars(COMPROBANTE_METODOS_PAGO[$metodo] ?? $metodo) ?>:</span>
                 <span class="value">S/ <?= number_format($monto, 2) ?></span>
             </div>
             <?php endforeach; ?>

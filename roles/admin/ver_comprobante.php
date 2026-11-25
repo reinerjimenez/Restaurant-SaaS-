@@ -33,27 +33,10 @@ $comp = $st->fetch();
 
 if (!$comp) { header('Location: historial_comprobantes.php'); exit; }
 
+require_once '../../includes/comprobante_termico.php';
 $items = json_decode($comp['items_json'] ?? '[]', true) ?: [];
 $pagos = json_decode($comp['pagos_json'] ?? '[]', true) ?: [];
-
-$itemsAgrupados = [];
-foreach ($items as $item) {
-    $key = ($item['producto_nombre'] ?? '') . '||' . ($item['opciones_texto'] ?? '');
-    if (isset($itemsAgrupados[$key])) {
-        $itemsAgrupados[$key]['cantidad'] += intval($item['cantidad']);
-        $itemsAgrupados[$key]['subtotal'] += floatval($item['subtotal']);
-    } else {
-        $itemsAgrupados[$key] = [
-            'nombre'   => $item['producto_nombre'] ?? '',
-            'opciones' => $item['opciones_texto']  ?? '',
-            'cantidad' => intval($item['cantidad']),
-            'precio'   => floatval($item['precio_unitario'] ?? 0),
-            'subtotal' => floatval($item['subtotal']),
-        ];
-    }
-}
-
-$metodoLabel = ['efectivo'=>'Efectivo','yape'=>'Yape/Plin','transferencia'=>'Transferencia','tarjeta'=>'Tarjeta','otro'=>'Otro'];
+$itemsAgrupados = comprobante_agrupar_items($items);
 
 $pageTitle  = 'Comprobante ' . htmlspecialchars($comp['numero_comprobante']);
 $activeMenu = 'comprobantes';
@@ -77,9 +60,7 @@ require_once '../../includes/header.php';
                     <i class="fa-solid fa-arrow-left"></i> Volver al historial
                 </a>
                 <?php endif; ?>
-                <button class="btn btn-primario btn-sm" onclick="window.print()">
-                    <i class="fa-solid fa-print"></i> Imprimir
-                </button>
+                <?php require '../../includes/comprobante_acciones_impresion.php'; ?>
                 <?php if (!$comp['anulado'] && in_array($rolActual, ['admin', 'superadmin'])): ?>
                 <button class="btn btn-peligro btn-sm" onclick="anularComprobante(<?= $comp['id'] ?>, '<?= htmlspecialchars(addslashes($comp['numero_comprobante'])) ?>')">
                     <i class="fa-solid fa-ban"></i> Anular
@@ -205,6 +186,12 @@ require_once '../../includes/header.php';
 
                 <!-- Totales -->
                 <div class="ticket-totales ticket-section">
+                    <?php if (($comp['cargo_extra'] ?? 0) > 0): ?>
+                    <div class="ticket-total-row"><span>Cargo extra:</span><span>S/ <?= number_format($comp['cargo_extra'], 2) ?></span></div>
+                    <?php endif; ?>
+                    <?php if (($comp['descuento'] ?? 0) > 0): ?>
+                    <div class="ticket-total-row"><span>Descuento:</span><span>-S/ <?= number_format($comp['descuento'], 2) ?></span></div>
+                    <?php endif; ?>
                     <?php if ($comp['tipo'] !== 'simple'): ?>
                     <div class="ticket-total-row"><span>Op. Gravada:</span><span>S/ <?= number_format($comp['subtotal'], 2) ?></span></div>
                     <div class="ticket-total-row"><span>IGV (18%):</span><span>S/ <?= number_format($comp['igv'], 2) ?></span></div>
@@ -217,8 +204,9 @@ require_once '../../includes/header.php';
                 <div class="ticket-pagos ticket-section">
                     <?php foreach ($pagos as $pago): ?>
                     <div class="ticket-row">
-                        <span class="label"><?= htmlspecialchars($metodoLabel[$pago['metodo']] ?? $pago['metodo']) ?>:</span>
-                        <span class="value">S/ <?= number_format(floatval($pago['monto']), 2) ?></span>
+                        <?php $metodo = $pago['metodo'] ?? 'otro'; ?>
+                        <span class="label"><?= htmlspecialchars(COMPROBANTE_METODOS_PAGO[$metodo] ?? $metodo) ?>:</span>
+                        <span class="value">S/ <?= number_format((float) ($pago['monto'] ?? 0), 2) ?></span>
                     </div>
                     <?php endforeach; ?>
                 </div>

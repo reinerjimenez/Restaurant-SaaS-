@@ -156,10 +156,21 @@
 /* ── Pantalla: botones de acción ─────────────────────────────── */
 .ticket-acciones {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     justify-content: center;
     margin: 20px 0;
 }
+.ticket-acciones .btn { min-height: 44px; }
+.ticket-acciones .ticket-rawbt[hidden] { display: none; }
+.ticket-rawbt[aria-disabled="true"] { opacity: .65; cursor: wait; }
+.ticket-rawbt-estado {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: .875rem;
+    color: var(--text-secondary);
+}
+.ticket-rawbt-estado:empty { position: absolute; }
 @media print {
     .ticket-acciones { display: none !important; }
 }
@@ -168,14 +179,16 @@
    ESTILOS DE IMPRESIÓN — TICKET TÉRMICO 80mm
    ══════════════════════════════════════════════════════════════ */
 @media print {
-    * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-        box-sizing: border-box;
-        color: #000 !important; /* Forzar negro absoluto para evitar tramados grises borrosos */
+    @page { margin: 4mm; }
+
+    #comprobante-print-root,
+    #comprobante-print-root * {
+        color: #000 !important;
+        background: #fff !important;
+        border-color: #000 !important;
+        box-shadow: none !important;
         text-shadow: none !important;
-        -webkit-font-smoothing: none !important; /* Desactiva el suavizado en Chrome/Edge */
-        -moz-osx-font-smoothing: grayscale !important; /* Desactiva el subpixel rendering en Firefox */
+        box-sizing: border-box;
     }
 
     /* Ocultar TODO visualmente pero mantener el layout base */
@@ -189,33 +202,63 @@
         visibility: visible !important;
     }
 
-    /* Posicionar el comprobante arriba a la izquierda para impresión */
-    #comprobante-print-root {
-        position: absolute !important;
-        left: 0 !important;
-        top: 0 !important;
+    /* Quitar el espacio reservado para navegación y auditoría, sin sacar el ticket del flujo de páginas. */
+    body:has(#comprobante-print-root),
+    .layout-admin:has(#comprobante-print-root),
+    .main-content:has(#comprobante-print-root),
+    .page-content:has(#comprobante-print-root) {
+        display: block !important;
+        min-height: 0 !important;
+        width: auto !important;
+        max-width: none !important;
         margin: 0 !important;
         padding: 0 !important;
-        width: 100% !important;
+        overflow: visible !important;
+        background: #fff !important;
+    }
+    .main-content:has(#comprobante-print-root) > :not(.page-content),
+    .page-content:has(#comprobante-print-root) > :not(#comprobante-print-root) {
+        display: none !important;
+    }
+
+    #comprobante-print-root {
+        margin: 0 auto !important;
+        padding: 0 !important;
+        width: 100%;
+        max-width: 72mm;
     }
 
     .ticket-wrapper {
-        width: 100% !important; /* Adaptarse al ancho de impresión sin forzar una medida fija que cause escalado */
-        max-width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        box-shadow: none !important;
+        max-width: none;
+        margin: 0;
+        padding: 0;
         border-radius: 0 !important;
-        font-size: 9pt;
-        page-break-inside: avoid;
+        font-family: system-ui, sans-serif;
+        font-size: 11pt;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
     }
 
-    .ticket-tipo-comp {
-        font-size: 10pt;
+    #comprobante-print-root .ticket-header > div,
+    .ticket-row,
+    .ticket-tipo-comp,
+    .ticket-items-table th,
+    .ticket-items-table td,
+    .ticket-items-table .item-opciones,
+    .ticket-total-row,
+    .ticket-pie {
+        font-size: 10pt !important;
     }
-
-    .ticket-items-table th { font-size: 8pt; }
-    .ticket-items-table td { font-size: 8.5pt; }
-
-    .ticket-total-row.total-final { font-size: 11pt; }
+    .ticket-items-table th,
+    .ticket-items-table td { padding: 3px 2px; }
+    .ticket-items-table tr,
+    .ticket-totales { break-inside: avoid; }
+    .ticket-header,
+    .ticket-section,
+    .ticket-items-table td { border-bottom-style: solid; }
+    .ticket-pie { border-top-style: solid; font-style: normal; }
+    .ticket-anulado-banner { border: 1px solid; }
+    .ticket-logo img { margin-inline: auto; filter: grayscale(1) contrast(1.6); }
+    #comprobante-print-root .ticket-header .razon-social,
+    #comprobante-print-root .total-final { font-size: 12pt !important; }
 }
